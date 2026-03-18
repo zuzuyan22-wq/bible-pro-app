@@ -1,0 +1,3920 @@
+﻿Skip to main content
+Zuriel Bible Pro
+Code assistant
+Feature Technical Approach Key Considerations
+Multiple Translations SQLite database with verse mapping Use USX/USFM standards for source texts
+Dictionary/Concordance Indexed SQLite with FTS5 search Strong's numbering system integration
+Split Screen React Native/React Web with flexbox layouts State management for synchronized scrolling
+Touch & Pop-up Gesture handlers + Modal/Tooltip components Performance optimization for rapid lookups
+Theology Resources JSON/XML structured data with tagging Catechism/Confession cross-referencing
+-- Core Bible Structure
+CREATE TABLE translations (
+id INTEGER PRIMARY KEY,
+code TEXT UNIQUE, -- 'KJV', 'ESV', 'NIV'
+name TEXT,
+language TEXT,
+license_info TEXT
+);
+CREATE TABLE books (
+id INTEGER PRIMARY KEY,
+testament TEXT, -- 'OT', 'NT'
+name TEXT,
+abbreviation TEXT,
+chapter_count INTEGER
+);
+CREATE TABLE verses (
+id INTEGER PRIMARY KEY,
+translation_id INTEGER,
+book_id INTEGER,
+chapter INTEGER,
+verse INTEGER,
+content TEXT,
+-- For split-screen alignment across translations
+canonical_id TEXT, -- "GEN.1.1" (OSIS format)
+FOREIGN KEY (translation_id) REFERENCES translations(id),
+FOREIGN KEY (book_id) REFERENCES books(id)
+);
+-- Dictionary/Concordance
+CREATE TABLE dictionary_entries (
+id INTEGER PRIMARY KEY,
+word TEXT,
+transliteration TEXT,
+strongs_number TEXT UNIQUE,
+definition TEXT,
+etymology TEXT,
+part_of_speech TEXT
+);
+CREATE TABLE concordance (
+id INTEGER PRIMARY KEY,
+strongs_number TEXT,
+verse_id INTEGER,
+word_form TEXT, -- The specific form used in the verse
+FOREIGN KEY (strongs_number) REFERENCES dictionary_entries(strongs_number),
+FOREIGN KEY (verse_id) REFERENCES verses(id)
+);
+-- Theological Resources
+CREATE TABLE theological_topics (
+id INTEGER PRIMARY KEY,
+title TEXT,
+category TEXT, -- 'Doctrine', 'Ethics', 'History'
+description TEXT,
+catechism_refs TEXT, -- JSON array
+confession_refs TEXT
+);
+CREATE TABLE cross_references (
+id INTEGER PRIMARY KEY,
+source_verse_id INTEGER,
+target_verse_id INTEGER,
+reference_type TEXT -- 'parallel', 'prophecy', 'quotation'
+);
+// React Native / React Web Example Structure
+const SplitScreenReader = () => {
+const [activeTranslations, setActiveTranslations] = useState(['KJV', 'ESV']);
+const [currentReference, setCurrentReference] = useState({ book: 'John', chapter: 1 });
+const [scrollSync, setScrollSync] = useState(true);
+// Synchronized scrolling logic
+const handleScroll = (event, paneIndex) => {
+if (!scrollSync) return;
+const scrollY = event.nativeEvent.contentOffset.y;
+// Broadcast to other panes
+otherPanes.forEach(pane => pane.scrollTo({ y: scrollY, animated: false }));
+};
+return (
+<View style={styles.container}>
+{activeTranslations.map((translation, index) => (
+<BiblePane
+key={translation}
+translation={translation}
+reference={currentReference}
+onScroll={(e) => handleScroll(e, index)}
+onVersePress={(verse) => showPopup(verse)}
+/>
+))}
+</View>
+);
+};
+// Interactive Verse Component
+const InteractiveVerse = ({ verseData, onStrongPress }) => {
+const [popupVisible, setPopupVisible] = useState(false);
+const [selectedWord, setSelectedWord] = useState(null);
+const handleLongPress = (word) => {
+setSelectedWord(word);
+setPopupVisible(true);
+};
+const renderPopupContent = () => {
+return (
+<View>
+<Text>Original: {selectedWord.original}</Text>
+<Text>Strongs: {selectedWord.strongs}</Text>
+<Text>Definition: {selectedWord.definition}</Text>
+<Button title="View Concordance" onPress={() => navigateToConcordance(selectedWord.strongs)} />
+<Button title="Cross References" onPress={() => showCrossRefs(verseData.id)} />
+</View>
+);
+};
+return (
+<>
+<TouchableOpacity onLongPress={() => handleLongPress(verseData)}>
+<Text style={styles.verseText}>{verseData.content}</Text>
+</TouchableOpacity>
+code
+Code
+<Modal visible={popupVisible} animationType="slide">
+    {renderPopupContent()}
+  </Modal>
+</>
+);
+};
+const ConcordanceSearch = ({ strongsNumber }) => {
+const [occurrences, setOccurrences] = useState([]);
+useEffect(() => {
+// Query all verses containing this Strong's number
+db.executeSql(
+SELECT v.*, b.name as book_name FROM verses v JOIN concordance c ON v.id = c.verse_id JOIN books b ON v.book_id = b.id WHERE c.strongs_number = ?,
+[strongsNumber]
+).then(results => setOccurrences(results));
+}, [strongsNumber]);
+return (
+<FlatList
+data={occurrences}
+renderItem={({ item }) => (
+<VerseCard
+verse={item}
+highlightWord={strongsNumber} // Highlight the specific Greek/Hebrew word
+/>
+)}
+/>
+);
+};
+const TheologicalNavigator = ({ topicId }) => {
+const [relatedVerses, setRelatedVerses] = useState([]);
+const [confessionArticles, setConfessionArticles] = useState([]);
+const loadTheologicalData = async () => {
+// Fetch verses tagged with this theological topic
+const verses = await getVersesByTopic(topicId);
+// Fetch relevant confession/catechism sections
+const confessions = await getConfessionRefs(topicId);
+code
+Code
+setRelatedVerses(verses);
+setConfessionArticles(confessions);
+};
+return (
+<View style={styles.theologyContainer}>
+<Section title="Scripture References" data={relatedVerses} />
+<Section title="Westminster Confession" data={confessionArticles} />
+<Section title="Heidelberg Catechism" data={heidelbergRefs} />
+</View>
+);
+};
+Resource Type Integration Method
+Digital Bible Library (DBL) Official translations API key required, USX format
+CrossWire Bible Society Open source modules SWORD API, local module import
+BibleHub/Blue Letter Bible Strong's data Web scraping (check TOS) or licensed API
+Open Bible Dataset Open source texts Direct JSON/XML import
+Westminster/Hidelberg Confessions Public domain, structured JSON
+UI/UX Design Principles
+1.
+Typography: Use serif fonts for scripture (Charis SIL, Noto Serif), sans-serif for UI
+2.
+Color Coding:
+Blue = Jesus' words
+Red = Cross-references
+Gold = Dictionary links
+3.
+Gesture Map:
+Tap = Select verse
+Long press = Word study popup
+Swipe left = Next chapter
+Pinch = Font size adjust
+Two-finger tap = Split screen toggle
+// Virtualization for long chapter lists
+import { FlashList } from "@shopify/flash-list";
+// Lazy loading for heavy theological resources
+const HeavyResource = lazy(() => import('./TheologicalDictionary'));
+// SQLite indexing strategy
+CREATE INDEX idx_verses_lookup ON verses(book_id, chapter, verse);
+CREATE INDEX idx_concordance_strongs ON concordance(strongs_number);
+CREATE VIRTUAL TABLE verse_search USING fts5(content, tokenize='porter');
+bible-app/
+├── src/
+│ ├── components/
+│ │ ├── reader/
+│ │ │ ├── SplitScreen.js
+│ │ │ ├── VerseRenderer.js
+│ │ │ ├── InterlinearView.js
+│ │ │ └── ParallelView.js
+│ │ ├── dictionary/
+│ │ │ ├── StrongEntry.js
+│ │ │ ├── ConcordanceList.js
+│ │ │ └── WordStudyPopup.js
+│ │ ├── navigation/
+│ │ │ ├── BookSelector.js
+│ │ │ ├── ChapterGrid.js
+│ │ │ └── BibleNavigator.js
+│ │ └── ui/
+│ │ ├── TouchableVerse.js
+│ │ ├── PopupModal.js
+│ │ └── HighlightedText.js
+│ ├── screens/
+│ │ ├── ReaderScreen.js
+│ │ ├── SearchScreen.js
+│ │ ├── DictionaryScreen.js
+│ │ ├── ConcordanceScreen.js
+│ │ ├── TheologyScreen.js
+│ │ └── SettingsScreen.js
+│ ├── database/
+│ │ ├── schema.sql
+│ │ ├── migrations/
+│ │ ├── BibleRepository.js
+│ │ ├── DictionaryRepository.js
+│ │ └── SearchRepository.js
+│ ├── services/
+│ │ ├── BibleService.js
+│ │ ├── DictionaryService.js
+│ │ ├── SearchService.js
+│ │ ├── SyncService.js
+│ │ └── AudioService.js
+│ ├── hooks/
+│ │ ├── useBibleData.js
+│ │ ├── useDictionary.js
+│ │ ├── useSearch.js
+│ │ └── useSplitScreen.js
+│ ├── utils/
+│ │ ├── referenceParser.js
+│ │ ├── textFormatter.js
+│ │ ├── highlightEngine.js
+│ │ └── gestureHandlers.js
+│ ├── constants/
+│ │ ├── books.js
+│ │ ├── translations.js
+│ │ └── theologyTopics.js
+│ └── App.js
+├── assets/
+│ ├── databases/
+│ │ ├── kjv.sqlite
+│ │ ├── strongs.sqlite
+│ │ └── westminster.sqlite
+│ ├── fonts/
+│ └── audio/
+└── package.json
+-- Enable foreign keys
+PRAGMA foreign_keys = ON;
+-- Translations/Bibles table
+CREATE TABLE IF NOT EXISTS translations (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+code TEXT UNIQUE NOT NULL, -- 'KJV', 'ESV2011', 'SBLGNT'
+name TEXT NOT NULL,
+short_name TEXT,
+language TEXT NOT NULL,
+language_code TEXT, -- 'eng', 'grc', 'heb'
+is_rtl BOOLEAN DEFAULT 0,
+has_strongs BOOLEAN DEFAULT 0,
+has_morphology BOOLEAN DEFAULT 0,
+has_redletters BOOLEAN DEFAULT 0,
+copyright TEXT,
+license_type TEXT, -- 'public_domain', 'cc_by', 'commercial'
+installed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+version TEXT
+);
+-- Books of the Bible
+CREATE TABLE IF NOT EXISTS books (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+testament TEXT NOT NULL CHECK(testament IN ('OT', 'NT', 'APOCRYPHA')),
+canonical_order INTEGER NOT NULL,
+name TEXT NOT NULL,
+short_name TEXT,
+abbreviation TEXT NOT NULL,
+osis_code TEXT UNIQUE, -- 'Gen', 'Matt'
+usfm_code TEXT,
+chapter_count INTEGER NOT NULL,
+verse_count INTEGER
+);
+-- Verses - partitioned by translation for performance
+CREATE TABLE IF NOT EXISTS verses (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+translation_id INTEGER NOT NULL,
+book_id INTEGER NOT NULL,
+chapter INTEGER NOT NULL,
+verse INTEGER NOT NULL,
+content TEXT NOT NULL,
+osis_ref TEXT NOT NULL, -- 'Gen.1.1'
+canonical_id TEXT, -- Cross-translation alignment ID
+is_redletter BOOLEAN DEFAULT 0,
+paragraph_id INTEGER, -- For paragraph formatting
+poetry_indent INTEGER DEFAULT 0, -- 0=prose, 1-3=poetry indentation levels
+code
+Code
+FOREIGN KEY (translation_id) REFERENCES translations(id) ON DELETE CASCADE,
+FOREIGN KEY (book_id) REFERENCES books(id),
+UNIQUE(translation_id, book_id, chapter, verse)
+);
+-- Indexes for verse lookup performance
+CREATE INDEX idx_verses_location ON verses(translation_id, book_id, chapter, verse);
+CREATE INDEX idx_verses_canonical ON verses(canonical_id);
+CREATE INDEX idx_verses_osis ON verses(osis_ref);
+-- Full-text search virtual table
+CREATE VIRTUAL TABLE IF NOT EXISTS verse_search USING fts5(
+content,
+osis_ref UNINDEXED,
+translation_id UNINDEXED,
+tokenize='porter unicode61'
+);
+-- Triggers to keep FTS index in sync
+CREATE TRIGGER IF NOT EXISTS verses_ai AFTER INSERT ON verses BEGIN
+INSERT INTO verse_search(content, osis_ref, translation_id)
+VALUES (new.content, new.osis_ref, new.translation_id);
+END;
+CREATE TRIGGER IF NOT EXISTS verses_ad AFTER DELETE ON verses BEGIN
+INSERT INTO verse_search(verse_search, rowid, content, osis_ref, translation_id)
+VALUES ('delete', old.id, old.content, old.osis_ref, old.translation_id);
+END;
+-- Strong's Dictionary
+CREATE TABLE IF NOT EXISTS strongs_entries (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+strongs_number TEXT UNIQUE NOT NULL, -- 'G2424', 'H7225'
+lemma TEXT NOT NULL, -- Original language word
+transliteration TEXT,
+pronunciation TEXT,
+part_of_speech TEXT,
+definition_short TEXT, -- Brief definition
+definition_full TEXT, -- Full definition with usage
+etymology TEXT,
+kjv_usage TEXT, -- JSON array of translations used
+frequency INTEGER, -- How many times it appears
+strongs_derivation TEXT, -- Related Strong's numbers
+see_also TEXT -- JSON array of related entries
+);
+-- Greek/Hebrew word forms for concordance
+CREATE TABLE IF NOT EXISTS word_forms (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+strongs_number TEXT NOT NULL,
+form TEXT NOT NULL, -- The specific inflected form
+parsing_code TEXT, -- Morphological parsing (e.g., "V-PAI-3S")
+parsing_description TEXT, -- Human-readable parsing
+code
+Code
+FOREIGN KEY (strongs_number) REFERENCES strongs_entries(strongs_number)
+);
+-- Concordance - links verses to Strong's numbers
+CREATE TABLE IF NOT EXISTS concordance (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+verse_id INTEGER NOT NULL,
+strongs_number TEXT NOT NULL,
+word_form_id INTEGER,
+word_position INTEGER, -- Position in verse (1-indexed)
+surface_form TEXT, -- How it appears in the text
+code
+Code
+FOREIGN KEY (verse_id) REFERENCES verses(id) ON DELETE CASCADE,
+FOREIGN KEY (strongs_number) REFERENCES strongs_entries(strongs_number),
+FOREIGN KEY (word_form_id) REFERENCES word_forms(id)
+);
+CREATE INDEX idx_concordance_strongs ON concordance(strongs_number);
+CREATE INDEX idx_concordance_verse ON concordance(verse_id);
+-- Cross-references between verses
+CREATE TABLE IF NOT EXISTS cross_references (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+source_osis_ref TEXT NOT NULL,
+target_osis_ref TEXT NOT NULL,
+reference_type TEXT CHECK(reference_type IN (
+'parallel', 'quotation', 'allusion', 'prophecy_fulfillment',
+' thematic', 'word_study', 'compare', 'contrast'
+)),
+weight REAL DEFAULT 1.0, -- Relevance score (0.0-1.0)
+description TEXT,
+code
+Code
+UNIQUE(source_osis_ref, target_osis_ref)
+);
+CREATE INDEX idx_xrefs_source ON cross_references(source_osis_ref);
+CREATE INDEX idx_xrefs_target ON cross_references(target_osis_ref);
+-- Theological taxonomy
+CREATE TABLE IF NOT EXISTS theological_categories (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+parent_id INTEGER,
+name TEXT NOT NULL,
+description TEXT,
+sort_order INTEGER,
+code
+Code
+FOREIGN KEY (parent_id) REFERENCES theological_categories(id)
+);
+-- Theological topics (doctrines, themes)
+CREATE TABLE IF NOT EXISTS theological_topics (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+category_id INTEGER,
+title TEXT NOT NULL,
+summary TEXT,
+detailed_content TEXT,
+scripture_refs TEXT, -- JSON array of osis_refs
+catechism_refs TEXT, -- JSON array of references
+confession_refs TEXT, -- JSON array
+systematic_refs TEXT, -- JSON array of systematic theology refs
+related_topics TEXT, -- JSON array of topic IDs
+code
+Code
+FOREIGN KEY (category_id) REFERENCES theological_categories(id)
+);
+-- Confessions and Catechisms
+CREATE TABLE IF NOT EXISTS confessions (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+code TEXT UNIQUE NOT NULL, -- 'WCF', 'HC', 'LBCF'
+name TEXT NOT NULL,
+full_name TEXT,
+year INTEGER,
+tradition TEXT -- 'Reformed', 'Lutheran', 'Catholic', etc.
+);
+CREATE TABLE IF NOT EXISTS confession_articles (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+confession_id INTEGER NOT NULL,
+chapter_number INTEGER,
+article_number INTEGER,
+title TEXT,
+content TEXT NOT NULL,
+scripture_proofs TEXT, -- JSON array of osis_refs
+original_language_text TEXT,
+code
+Code
+FOREIGN KEY (confession_id) REFERENCES confessions(id)
+);
+-- User data
+CREATE TABLE IF NOT EXISTS user_highlights (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+osis_ref TEXT NOT NULL,
+translation_id INTEGER,
+start_verse INTEGER,
+end_verse INTEGER,
+color TEXT DEFAULT '#FFD700',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+note TEXT
+);
+CREATE TABLE IF NOT EXISTS user_notes (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+osis_ref TEXT NOT NULL,
+translation_id INTEGER,
+title TEXT,
+content TEXT,
+tags TEXT, -- JSON array
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+is_public BOOLEAN DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS user_bookmarks (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+osis_ref TEXT NOT NULL,
+translation_id INTEGER,
+label TEXT,
+color TEXT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+sort_order INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS reading_plans (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+name TEXT NOT NULL,
+description TEXT,
+total_days INTEGER,
+schedule TEXT -- JSON: array of {day: 1, readings: ['Gen.1.1-Gen.1.31', 'Matt.1.1-Matt.1.25']}
+);
+CREATE TABLE IF NOT EXISTS user_reading_progress (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+plan_id INTEGER,
+current_day INTEGER,
+completed_readings TEXT, -- JSON array of completed osis_refs
+last_read_at TIMESTAMP,
+is_completed BOOLEAN DEFAULT 0,
+code
+Code
+FOREIGN KEY (plan_id) REFERENCES reading_plans(id)
+);
+-- Search history
+CREATE TABLE IF NOT EXISTS search_history (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+query TEXT NOT NULL,
+search_type TEXT, -- 'text', 'strongs', 'topic', 'reference'
+results_count INTEGER,
+timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+import React, { useState, useRef, useCallback } from 'react';
+import {
+View,
+StyleSheet,
+PanResponder,
+Animated,
+Dimensions,
+TouchableOpacity,
+Text
+} from 'react-native';
+import BiblePane from './BiblePane';
+import { useSplitScreen } from '../../hooks/useSplitScreen';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MIN_PANE_WIDTH = 200;
+const DEFAULT_SPLIT = SCREEN_WIDTH / 2;
+const SplitScreen = ({
+initialTranslations = ['KJV', 'ESV'],
+initialReference = { book: 'John', chapter: 3 }
+}) => {
+const [panes, setPanes] = useState([
+{ id: 1, translation: initialTranslations[0], width: DEFAULT_SPLIT },
+{ id: 2, translation: initialTranslations[1] || 'KJV', width: DEFAULT_SPLIT }
+]);
+const [isSyncEnabled, setIsSyncEnabled] = useState(true);
+const [currentReference, setCurrentReference] = useState(initialReference);
+const splitPosition = useRef(new Animated.ValueXY({ x: DEFAULT_SPLIT, y: 0 })).current;
+const paneRefs = useRef({});
+// Synchronized scrolling across panes
+const handleScroll = useCallback((scrollData, sourcePaneId) => {
+if (!isSyncEnabled) return;
+code
+Code
+// Calculate proportional scroll position based on content height ratios
+const { scrollY, contentHeight, layoutHeight } = scrollData;
+const scrollRatio = scrollY / (contentHeight - layoutHeight);
+
+Object.keys(paneRefs.current).forEach(paneId => {
+  if (parseInt(paneId) !== sourcePaneId && paneRefs.current[paneId]) {
+    paneRefs.current[paneId].syncScroll(scrollRatio);
+  }
+});
+}, [isSyncEnabled]);
+// Handle verse selection (sync across panes)
+const handleVerseSelect = useCallback((verseRef) => {
+setCurrentReference(verseRef);
+code
+Code
+// Highlight same verse in all panes
+Object.values(paneRefs.current).forEach(pane => {
+  if (pane) pane.highlightVerse(verseRef);
+});
+}, []);
+// Add new pane (up to 3)
+const addPane = () => {
+if (panes.length >= 3) return;
+setPanes([...panes, {
+id: Date.now(),
+translation: 'KJV',
+width: SCREEN_WIDTH / (panes.length + 1)
+}]);
+};
+// Remove pane
+const removePane = (id) => {
+if (panes.length <= 1) return;
+setPanes(panes.filter(p => p.id !== id));
+};
+// Change translation for a pane
+const changeTranslation = (paneId, newTranslation) => {
+setPanes(panes.map(p =>
+p.id === paneId ? { ...p, translation: newTranslation } : p
+));
+};
+// Pan responder for resize handle
+const panResponder = useRef(
+PanResponder.create({
+onStartShouldSetPanResponder: () => true,
+onMoveShouldSetPanResponder: () => true,
+onPanResponderMove: (, gestureState) => {
+const newX = Math.max(MIN_PANE_WIDTH,
+Math.min(SCREEN_WIDTH - MIN_PANE_WIDTH, gestureState.moveX));
+splitPosition.setValue({ x: newX, y: 0 });
+},
+onPanResponderRelease: (, gestureState) => {
+const newX = Math.max(MIN_PANE_WIDTH,
+Math.min(SCREEN_WIDTH - MIN_PANE_WIDTH, gestureState.moveX));
+// Update pane widths
+setPanes(panes.map((p, idx) => ({
+...p,
+width: idx === 0 ? newX : (SCREEN_WIDTH - newX) / (panes.length - 1)
+})));
+}
+})
+).current;
+return (
+<View style={styles.container}>
+<View style={styles.toolbar}>
+<TouchableOpacity onPress={() => setIsSyncEnabled(!isSyncEnabled)}>
+<Text style={[styles.syncButton, isSyncEnabled && styles.syncActive]}>
+{isSyncEnabled ? 'Sync ON' : 'Sync OFF'}
+</Text>
+</TouchableOpacity>
+<TouchableOpacity onPress={addPane}>
+<Text style={styles.addButton}>+ Pane</Text>
+</TouchableOpacity>
+</View>
+code
+Code
+<View style={styles.panesContainer}>
+    {panes.map((pane, index) => (
+      <View 
+        key={pane.id} 
+        style={[styles.pane, { width: pane.width }]}
+      >
+        <BiblePane
+          ref={ref => paneRefs.current[pane.id] = ref}
+          paneId={pane.id}
+          translation={pane.translation}
+          reference={currentReference}
+          onScroll={(data) => handleScroll(data, pane.id)}
+          onVerseSelect={handleVerseSelect}
+          onChangeTranslation={(t) => changeTranslation(pane.id, t)}
+          onClose={() => removePane(pane.id)}
+          canClose={panes.length > 1}
+        />
+        
+        {index < panes.length - 1 && (
+          <Animated.View
+            style={[
+              styles.resizeHandle,
+              { transform: [{ translateX: splitPosition.x }] }
+            ]}
+            {...panResponder.panHandlers}
+          >
+            <View style={styles.handleBar} />
+          </Animated.View>
+        )}
+      </View>
+    ))}
+  </View>
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#f5f5f5',
+},
+toolbar: {
+flexDirection: 'row',
+padding: 10,
+backgroundColor: '#fff',
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+justifyContent: 'space-between',
+},
+syncButton: {
+padding: 8,
+borderRadius: 4,
+backgroundColor: '#e0e0e0',
+},
+syncActive: {
+backgroundColor: '#4CAF50',
+color: '#fff',
+},
+addButton: {
+padding: 8,
+borderRadius: 4,
+backgroundColor: '#2196F3',
+color: '#fff',
+},
+panesContainer: {
+flex: 1,
+flexDirection: 'row',
+},
+pane: {
+flex: 1,
+borderRightWidth: 1,
+borderRightColor: '#e0e0e0',
+},
+resizeHandle: {
+position: 'absolute',
+right: -15,
+top: 0,
+bottom: 0,
+width: 30,
+zIndex: 10,
+justifyContent: 'center',
+alignItems: 'center',
+},
+handleBar: {
+width: 4,
+height: 40,
+backgroundColor: '#999',
+borderRadius: 2,
+},
+});
+export default SplitScreen;
+import React, { forwardRef, useImperativeHandle, useRef, useState, useCallback } from 'react';
+import {
+View,
+Text,
+ScrollView,
+StyleSheet,
+TouchableOpacity,
+Modal,
+Dimensions
+} from 'react-native';
+import VerseRenderer from './VerseRenderer';
+import TouchableVerse from '../ui/TouchableVerse';
+import PopupModal from '../ui/PopupModal';
+import { useBibleData } from '../../hooks/useBibleData';
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const BiblePane = forwardRef(({
+paneId,
+translation,
+reference,
+onScroll,
+onVerseSelect,
+onChangeTranslation,
+onClose,
+canClose
+}, ref) => {
+const scrollViewRef = useRef(null);
+const [popupData, setPopupData] = useState(null);
+const [selectedVerse, setSelectedVerse] = useState(null);
+const {
+verses,
+loading,
+bookName,
+chapterTitle,
+loadChapter
+} = useBibleData(translation, reference);
+// Expose methods to parent via ref
+useImperativeHandle(ref, () => ({
+syncScroll: (ratio) => {
+scrollViewRef.current?.scrollTo({
+y: ratio * (contentHeight - layoutHeight),
+animated: false
+});
+},
+highlightVerse: (verseRef) => {
+setSelectedVerse(verseRef);
+// Auto-scroll to verse
+const verseIndex = verses.findIndex(v => v.osis_ref === verseRef);
+if (verseIndex !== -1) {
+scrollViewRef.current?.scrollTo({
+y: verseIndex * 50, // Approximate verse height
+animated: true
+});
+}
+}
+}));
+let contentHeight = 0;
+let layoutHeight = 0;
+const handleScroll = (event) => {
+const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+contentHeight = contentSize.height;
+layoutHeight = layoutMeasurement.height;
+code
+Code
+onScroll?.({
+  scrollY: contentOffset.y,
+  contentHeight,
+  layoutHeight,
+  scrollRatio: contentOffset.y / (contentHeight - layoutHeight)
+});
+};
+const handleVersePress = (verse, gestureType) => {
+if (gestureType === 'long') {
+// Show word study popup
+setPopupData({
+type: 'word_study',
+verse,
+translation
+});
+} else {
+setSelectedVerse(verse.osis_ref);
+onVerseSelect?.(verse);
+}
+};
+const handleWordPress = (word, strongsNumber, verseContext) => {
+setPopupData({
+type: 'strongs',
+word,
+strongsNumber,
+verseContext
+});
+};
+const renderHeader = () => (
+<View style={styles.header}>
+<Text style={styles.headerTitle}>{bookName} {reference.chapter}</Text>
+<Text style={styles.translationLabel}>{translation}</Text>
+{canClose && (
+<TouchableOpacity onPress={onClose} style={styles.closeButton}>
+<Text>×</Text>
+</TouchableOpacity>
+)}
+</View>
+);
+return (
+<View style={styles.container}>
+{renderHeader()}
+code
+Code
+<ScrollView
+    ref={scrollViewRef}
+    style={styles.scrollView}
+    onScroll={handleScroll}
+    scrollEventThrottle={16}
+    removeClippedSubviews={true}
+    maxToRenderPerBatch={10}
+    windowSize={5}
+  >
+    <View style={styles.content}>
+      {verses.map((verse, index) => (
+        <TouchableVerse
+          key={verse.id}
+          verse={verse}
+          isSelected={selectedVerse === verse.osis_ref}
+          isRedLetter={verse.is_redletter}
+          showVerseNumbers={index === 0 || verse.verse === 1}
+          onPress={(v) => handleVersePress(v, 'tap')}
+          onLongPress={(v) => handleVersePress(v, 'long')}
+          onWordPress={handleWordPress}
+          interlinear={verse.interlinear_data} // For Greek/Hebrew
+        />
+      ))}
+    </View>
+  </ScrollView>
+
+  <PopupModal
+    visible={!!popupData}
+    onClose={() => setPopupData(null)}
+    data={popupData}
+  />
+</View>
+);
+});
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+header: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+padding: 12,
+backgroundColor: '#fafafa',
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+},
+headerTitle: {
+fontSize: 18,
+fontWeight: '600',
+fontFamily: 'Georgia',
+},
+translationLabel: {
+fontSize: 12,
+color: '#666',
+backgroundColor: '#e0e0e0',
+paddingHorizontal: 8,
+paddingVertical: 2,
+borderRadius: 4,
+},
+closeButton: {
+padding: 8,
+fontSize: 20,
+},
+scrollView: {
+flex: 1,
+},
+content: {
+padding: 16,
+},
+});
+export default BiblePane;
+import React, { useState, useCallback } from 'react';
+import {
+View,
+Text,
+StyleSheet,
+TouchableOpacity,
+Animated,
+PanResponder
+} from 'react-native';
+const TouchableVerse = ({
+verse,
+isSelected,
+isRedLetter,
+showVerseNumbers,
+onPress,
+onLongPress,
+onWordPress,
+interlinear,
+fontSize = 18,
+lineHeight = 28
+}) => {
+const [isHighlighted, setIsHighlighted] = useState(false);
+const scaleAnim = new Animated.Value(1);
+// Parse content for Strong's numbers if available
+const renderContent = () => {
+if (!interlinear) {
+return (
+<Text style={[
+styles.verseText,
+isRedLetter && styles.redLetter,
+{ fontSize, lineHeight }
+]}>
+{showVerseNumbers && (
+<Text style={styles.verseNumber}>{verse.verse} </Text>
+)}
+{verse.content}
+</Text>
+);
+}
+code
+Code
+// Render interlinear with tap targets for each word
+return (
+  <View style={styles.interlinearContainer}>
+    {showVerseNumbers && (
+      <Text style={styles.verseNumber}>{verse.verse} </Text>
+    )}
+    {interlinear.map((word, idx) => (
+      <TouchableOpacity
+        key={idx}
+        onPress={() => onWordPress?.(word, word.strongs, verse)}
+        style={styles.wordContainer}
+      >
+        <Text style={styles.greekWord}>{word.original}</Text>
+        <Text style={styles.transliteration}>{word.transliteration}</Text>
+        <Text style={styles.englishGloss}>{word.gloss}</Text>
+        <Text style={styles.strongsNumber}>{word.strongs}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+};
+const handlePressIn = () => {
+Animated.spring(scaleAnim, {
+toValue: 0.98,
+useNativeDriver: true
+}).start();
+setIsHighlighted(true);
+};
+const handlePressOut = () => {
+Animated.spring(scaleAnim, {
+toValue: 1,
+useNativeDriver: true
+}).start();
+setIsHighlighted(false);
+};
+return (
+<Animated.View
+style={[
+styles.container,
+isSelected && styles.selectedContainer,
+isHighlighted && styles.highlightedContainer,
+{ transform: [{ scale: scaleAnim }] }
+]}
+>
+<TouchableOpacity
+onPress={() => onPress(verse)}
+onLongPress={() => onLongPress(verse)}
+onPressIn={handlePressIn}
+onPressOut={handlePressOut}
+delayLongPress={500}
+activeOpacity={0.8}
+>
+{renderContent()}
+</TouchableOpacity>
+code
+Code
+{/* Selection toolbar that appears when selected */}
+  {isSelected && (
+    <View style={styles.selectionToolbar}>
+      <TouchableOpacity style={styles.toolbarBtn}>
+        <Text>Highlight</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.toolbarBtn}>
+        <Text>Note</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.toolbarBtn}>
+        <Text>Share</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.toolbarBtn}>
+        <Text>Compare</Text>
+      </TouchableOpacity>
+    </View>
+  )}
+</Animated.View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+marginVertical: 4,
+padding: 8,
+borderRadius: 4,
+},
+selectedContainer: {
+backgroundColor: '#E3F2FD',
+},
+highlightedContainer: {
+backgroundColor: '#f5f5f5',
+},
+verseText: {
+fontFamily: 'CharisSIL',
+color: '#333',
+},
+verseNumber: {
+fontSize: 12,
+color: '#666',
+fontWeight: '600',
+lineHeight: 20,
+},
+redLetter: {
+color: '#8B0000',
+},
+interlinearContainer: {
+flexDirection: 'row',
+flexWrap: 'wrap',
+alignItems: 'flex-end',
+},
+wordContainer: {
+alignItems: 'center',
+marginHorizontal: 4,
+marginVertical: 2,
+padding: 4,
+borderRadius: 4,
+backgroundColor: '#fafafa',
+},
+greekWord: {
+fontFamily: 'GentiumPlus',
+fontSize: 16,
+color: '#333',
+},
+transliteration: {
+fontSize: 10,
+color: '#666',
+fontStyle: 'italic',
+},
+englishGloss: {
+fontSize: 11,
+color: '#2196F3',
+},
+strongsNumber: {
+fontSize: 9,
+color: '#999',
+},
+selectionToolbar: {
+flexDirection: 'row',
+justifyContent: 'space-around',
+marginTop: 8,
+paddingTop: 8,
+borderTopWidth: 1,
+borderTopColor: '#e0e0e0',
+},
+toolbarBtn: {
+padding: 8,
+},
+});
+export default TouchableVerse;
+import React from 'react';
+import {
+View,
+Text,
+StyleSheet,
+Modal,
+TouchableOpacity,
+ScrollView,
+Dimensions,
+Animated
+} from 'react-native';
+import { useDictionary } from '../../hooks/useDictionary';
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const POPUP_HEIGHT = SCREEN_HEIGHT * 0.6;
+const PopupModal = ({ visible, onClose, data }) => {
+if (!data) return null;
+const { type } = data;
+const renderContent = () => {
+switch (type) {
+case 'strongs':
+return <StrongsPopupContent data={data} />;
+case 'word_study':
+return <WordStudyPopupContent data={data} />;
+case 'cross_ref':
+return <CrossRefPopupContent data={data} />;
+default:
+return <Text>Unknown popup type</Text>;
+}
+};
+return (
+<Modal
+visible={visible}
+transparent={true}
+animationType="slide"
+onRequestClose={onClose}
+>
+<View style={styles.overlay}>
+<TouchableOpacity style={styles.backdrop} onPress={onClose} />
+<Animated.View style={styles.popupContainer}>
+<View style={styles.handle} />
+{renderContent()}
+</Animated.View>
+</View>
+</Modal>
+);
+};
+// Strong's Dictionary Popup
+const StrongsPopupContent = ({ data }) => {
+const { word, strongsNumber, verseContext } = data;
+const { entry, concordance, loading } = useDictionary(strongsNumber);
+if (loading) return <Text>Loading...</Text>;
+return (
+<ScrollView style={styles.content}>
+<View style={styles.header}>
+<Text style={styles.lemma}>{entry?.lemma}</Text>
+<Text style={styles.strongsNum}>{strongsNumber}</Text>
+</View>
+code
+Code
+<Text style={styles.transliteration}>{entry?.transliteration}</Text>
+  <Text style={styles.pronunciation}>{entry?.pronunciation}</Text>
+  
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Definition</Text>
+    <Text style={styles.definition}>{entry?.definition_full}</Text>
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Usage in KJV</Text>
+    <Text style={styles.kjvUsage}>{entry?.kjv_usage}</Text>
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>
+      Concordance ({concordance?.length || 0} occurrences)
+    </Text>
+    <TouchableOpacity style={styles.actionButton}>
+      <Text>View Full Concordance</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Morphology</Text>
+    <Text>{entry?.part_of_speech}</Text>
+  </View>
+</ScrollView>
+);
+};
+// Word Study Popup (verse-level)
+const WordStudyPopupContent = ({ data }) => {
+const { verse, translation } = data;
+return (
+<ScrollView style={styles.content}>
+<Text style={styles.reference}>{verse.osis_ref}</Text>
+<Text style={styles.verseText}>"{verse.content}"</Text>
+code
+Code
+<View style={styles.actions}>
+    <TouchableOpacity style={styles.actionButton}>
+      <Text>Cross References</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={styles.actionButton}>
+      <Text>Commentaries</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={styles.actionButton}>
+      <Text>Themes</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={styles.actionButton}>
+      <Text>Maps</Text>
+    </TouchableOpacity>
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Original Language</Text>
+    <Text>Available in: SBL Greek, WLC Hebrew</Text>
+  </View>
+</ScrollView>
+);
+};
+const styles = StyleSheet.create({
+overlay: {
+flex: 1,
+justifyContent: 'flex-end',
+backgroundColor: 'rgba(0,0,0,0.5)',
+},
+backdrop: {
+flex: 1,
+},
+popupContainer: {
+height: POPUP_HEIGHT,
+backgroundColor: '#fff',
+borderTopLeftRadius: 20,
+borderTopRightRadius: 20,
+padding: 20,
+},
+handle: {
+width: 40,
+height: 4,
+backgroundColor: '#ccc',
+borderRadius: 2,
+alignSelf: 'center',
+marginBottom: 10,
+},
+content: {
+flex: 1,
+},
+header: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+marginBottom: 10,
+},
+lemma: {
+fontSize: 28,
+fontFamily: 'GentiumPlus',
+color: '#333',
+},
+strongsNum: {
+fontSize: 14,
+color: '#666',
+backgroundColor: '#f0f0f0',
+padding: 4,
+borderRadius: 4,
+},
+transliteration: {
+fontSize: 16,
+fontStyle: 'italic',
+color: '#666',
+marginBottom: 4,
+},
+pronunciation: {
+fontSize: 14,
+color: '#999',
+marginBottom: 16,
+},
+section: {
+marginVertical: 12,
+paddingVertical: 12,
+borderTopWidth: 1,
+borderTopColor: '#e0e0e0',
+},
+sectionTitle: {
+fontSize: 14,
+fontWeight: '600',
+color: '#333',
+marginBottom: 8,
+textTransform: 'uppercase',
+},
+definition: {
+fontSize: 16,
+lineHeight: 24,
+color: '#333',
+},
+kjvUsage: {
+fontSize: 14,
+color: '#666',
+fontStyle: 'italic',
+},
+actions: {
+flexDirection: 'row',
+flexWrap: 'wrap',
+marginVertical: 12,
+},
+actionButton: {
+backgroundColor: '#f0f0f0',
+paddingHorizontal: 16,
+paddingVertical: 8,
+borderRadius: 20,
+marginRight: 8,
+marginBottom: 8,
+},
+reference: {
+fontSize: 14,
+color: '#666',
+marginBottom: 8,
+},
+verseText: {
+fontSize: 18,
+fontStyle: 'italic',
+color: '#333',
+lineHeight: 28,
+marginBottom: 16,
+},
+});
+export default PopupModal;
+import { useState, useEffect, useCallback } from 'react';
+import BibleRepository from '../database/BibleRepository';
+const repository = new BibleRepository();
+export const useBibleData = (translation, reference) => {
+const [verses, setVerses] = useState([]);
+const [loading, setLoading] = useState(true);
+const [bookName, setBookName] = useState('');
+const [chapterTitle, setChapterTitle] = useState('');
+const loadChapter = useCallback(async () => {
+setLoading(true);
+try {
+const data = await repository.getChapterVerses(
+translation,
+reference.book,
+reference.chapter
+);
+code
+Code
+// Enrich with interlinear data if available
+  const enrichedVerses = await Promise.all(
+    data.map(async (verse) => {
+      if (verse.has_strongs) {
+        const interlinear = await repository.getInterlinearData(verse.id);
+        return { ...verse, interlinear_data: interlinear };
+      }
+      return verse;
+    })
+  );
+
+  setVerses(enrichedVerses);
+  
+  const book = await repository.getBookInfo(reference.book);
+  setBookName(book.name);
+  setChapterTitle(`${book.name} ${reference.chapter}`);
+} catch (error) {
+  console.error('Failed to load chapter:', error);
+} finally {
+  setLoading(false);
+}
+}, [translation, reference.book, reference.chapter]);
+useEffect(() => {
+loadChapter();
+}, [loadChapter]);
+return {
+verses,
+loading,
+bookName,
+chapterTitle,
+loadChapter,
+refresh: loadChapter
+};
+};
+import { useState, useEffect } from 'react';
+import DictionaryRepository from '../database/DictionaryRepository';
+const repository = new DictionaryRepository();
+export const useDictionary = (strongsNumber) => {
+const [entry, setEntry] = useState(null);
+const [concordance, setConcordance] = useState([]);
+const [loading, setLoading] = useState(true);
+useEffect(() => {
+const loadData = async () => {
+if (!strongsNumber) return;
+code
+Code
+setLoading(true);
+  try {
+    const [entryData, concordanceData] = await Promise.all([
+      repository.getStrongsEntry(strongsNumber),
+      repository.getConcordance(strongsNumber, { limit: 50 })
+    ]);
+    
+    setEntry(entryData);
+    setConcordance(concordanceData);
+  } catch (error) {
+    console.error('Dictionary load error:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+loadData();
+}, [strongsNumber]);
+return { entry, concordance, loading };
+};
+import { useState, useCallback, useRef } from 'react';
+import { Animated } from 'react-native';
+export const useSplitScreen = (initialConfig = {}) => {
+const [panes, setPanes] = useState(initialConfig.panes || [
+{ id: 'primary', translation: 'KJV', scrollPosition: 0 },
+{ id: 'secondary', translation: 'ESV', scrollPosition: 0 }
+]);
+const [syncEnabled, setSyncEnabled] = useState(true);
+const scrollPositions = useRef({}).current;
+const updateScrollPosition = useCallback((paneId, position, contentHeight) => {
+scrollPositions[paneId] = { position, contentHeight };
+code
+Code
+if (!syncEnabled) return;
+
+// Calculate scroll ratio
+const ratio = position / contentHeight;
+
+// Sync other panes
+Object.keys(scrollPositions).forEach(id => {
+  if (id !== paneId) {
+    const targetPane = panes.find(p => p.id === id);
+    if (targetPane && targetPane.ref) {
+      const targetHeight = scrollPositions[id]?.contentHeight || contentHeight;
+      targetPane.ref.scrollTo({
+        y: ratio * targetHeight,
+        animated: false
+      });
+    }
+  }
+});
+}, [panes, syncEnabled]);
+const registerPane = (id, ref) => {
+setPanes(current =>
+current.map(p => p.id === id ? { ...p, ref } : p)
+);
+};
+const addPane = (translation) => {
+const newId = pane_${Date.now()};
+setPanes([...panes, {
+id: newId,
+translation,
+scrollPosition: 0,
+ref: null
+}]);
+};
+const removePane = (id) => {
+if (panes.length <= 1) return;
+setPanes(panes.filter(p => p.id !== id));
+};
+const changeTranslation = (id, translation) => {
+setPanes(panes.map(p =>
+p.id === id ? { ...p, translation } : p
+));
+};
+return {
+panes,
+syncEnabled,
+setSyncEnabled,
+updateScrollPosition,
+registerPane,
+addPane,
+removePane,
+changeTranslation
+};
+};
+import SQLite from 'react-native-sqlite-storage';
+SQLite.enablePromise(true);
+class BibleRepository {
+constructor() {
+this.db = null;
+this.init();
+}
+async init() {
+this.db = await SQLite.openDatabase({
+name: 'bible_data.db',
+location: 'default',
+});
+code
+Code
+// Attach additional databases for translations
+await this.attachTranslationDatabases();
+}
+async attachTranslationDatabases() {
+// Attach KJV, ESV, etc. as separate databases
+const translations = ['kjv', 'esv', 'sblgnt'];
+for (const trans of translations) {
+await this.db.executeSql(
+ATTACH DATABASE ? AS ${trans},
+[${trans}.sqlite]
+);
+}
+}
+async getChapterVerses(translation, bookOsis, chapter) {
+const query = SELECT v.id, v.book_id, v.chapter, v.verse, v.content, v.osis_ref, v.is_redletter, v.paragraph_id, v.poetry_indent, b.name as book_name, b.abbreviation as book_abbrev FROM ${translation}.verses v JOIN books b ON v.book_id = b.id WHERE b.osis_code = ? AND v.chapter = ? ORDER BY v.verse ASC;
+code
+Code
+const [results] = await this.db.executeSql(query, [bookOsis, chapter]);
+return results.rows.raw();
+}
+async getInterlinearData(verseId) {
+const query = SELECT wf.form as original, wf.transliteration, wf.parsing_code, wf.parsing_description, se.strongs_number, se.lemma, se.definition_short as gloss FROM concordance c JOIN word_forms wf ON c.word_form_id = wf.id JOIN strongs_entries se ON c.strongs_number = se.strongs_number WHERE c.verse_id = ? ORDER BY c.word_position ASC;
+code
+Code
+const [results] = await this.db.executeSql(query, [verseId]);
+return results.rows.raw();
+}
+async searchText(query, options = {}) {
+const {
+translations = ['KJV'],
+testament = null,
+limit = 50,
+offset = 0
+} = options;
+code
+Code
+// Use FTS5 for full-text search
+const ftsQuery = query
+  .replace(/"/g, '""')
+  .split(/\s+/)
+  .map(term => `${term}*`)
+  .join(' ');
+
+const query_sql = `
+  SELECT 
+    v.*,
+    b.name as book_name,
+    snippet(verse_search, 0, '<mark>', '</mark>', '...', 32) as highlighted_content,
+    rank
+  FROM verse_search fs
+  JOIN verses v ON fs.rowid = v.id
+  JOIN books b ON v.book_id = b.id
+  WHERE verse_search MATCH ? 
+    AND v.translation_id IN (${translations.map(() => '?').join(',')})
+    ${testament ? `AND b.testament = ?` : ''}
+  ORDER BY rank
+  LIMIT ? OFFSET ?
+`;
+
+const params = [
+  ftsQuery, 
+  ...translations, 
+  ...(testament ? [testament] : []),
+  limit, 
+  offset
+];
+
+const [results] = await this.db.executeSql(query_sql, params);
+return results.rows.raw();
+}
+async getCrossReferences(osisRef, options = {}) {
+const { limit = 20, type = null } = options;
+code
+Code
+const query = `
+  SELECT 
+    cr.*,
+    sv.content as source_content,
+    tv.content as target_content,
+    sb.name as source_book,
+    tb.name as target_book
+  FROM cross_references cr
+  JOIN verses sv ON cr.source_osis_ref = sv.osis_ref
+  JOIN verses tv ON cr.target_osis_ref = tv.osis_ref
+  JOIN books sb ON sv.book_id = sb.id
+  JOIN books tb ON tv.book_id = tb.id
+  WHERE cr.source_osis_ref = ?
+    ${type ? `AND cr.reference_type = ?` : ''}
+  ORDER BY cr.weight DESC
+  LIMIT ?
+`;
+
+const params = [osisRef, ...(type ? [type] : []), limit];
+const [results] = await this.db.executeSql(query, params);
+return results.rows.raw();
+}
+async getParallelPassages(osisRef) {
+// Get parallels (synoptic gospels, etc.)
+return this.getCrossReferences(osisRef, { type: 'parallel', limit: 10 });
+}
+async getThematicReferences(topicId) {
+const query = SELECT scripture_refs FROM theological_topics WHERE id = ?;
+code
+Code
+const [results] = await this.db.executeSql(query, [topicId]);
+const refs = JSON.parse(results.rows.item(0).scripture_refs);
+
+// Fetch actual verses
+const verses = await Promise.all(
+  refs.map(ref => this.getVerseByOsisRef(ref))
+);
+
+return verses;
+}
+async getVerseByOsisRef(osisRef, translation = 'KJV') {
+const [book, chapter, verse] = osisRef.split('.');
+code
+Code
+const query = `
+  SELECT v.*, b.name as book_name
+  FROM ${translation}.verses v
+  JOIN books b ON v.book_id = b.id
+  WHERE b.osis_code = ? AND v.chapter = ? AND v.verse = ?
+`;
+
+const [results] = await this.db.executeSql(query, [book, chapter, verse]);
+return results.rows.item(0);
+}
+async getReadingPlanProgress(planId) {
+const query = SELECT rp.*, p.name as plan_name, p.total_days, p.schedule FROM user_reading_progress rp JOIN reading_plans p ON rp.plan_id = p.id WHERE rp.plan_id = ?;
+code
+Code
+const [results] = await this.db.executeSql(query, [planId]);
+return results.rows.item(0);
+}
+}
+export default BibleRepository;
+import SQLite from 'react-native-sqlite-storage';
+class DictionaryRepository {
+constructor() {
+this.db = null;
+this.init();
+}
+async init() {
+this.db = await SQLite.openDatabase({
+name: 'dictionary.db',
+location: 'default',
+});
+}
+async getStrongsEntry(strongsNumber) {
+const query = SELECT * FROM strongs_entries WHERE strongs_number = ?;
+code
+Code
+const [results] = await this.db.executeSql(query, [strongsNumber]);
+return results.rows.item(0);
+}
+async getConcordance(strongsNumber, options = {}) {
+const { limit = 100, offset = 0, translation = null } = options;
+code
+Code
+const query = `
+  SELECT 
+    c.*,
+    v.content as verse_content,
+    v.osis_ref,
+    v.chapter,
+    v.verse,
+    b.name as book_name,
+    b.osis_code as book_osis
+  FROM concordance c
+  JOIN verses v ON c.verse_id = v.id
+  JOIN books b ON v.book_id = b.id
+  WHERE c.strongs_number = ?
+    ${translation ? `AND v.translation_id = ?` : ''}
+  ORDER BY v.book_id, v.chapter, v.verse
+  LIMIT ? OFFSET ?
+`;
+
+const params = [
+  strongsNumber, 
+  ...(translation ? [translation] : []),
+  limit, 
+  offset
+];
+
+const [results] = await this.db.executeSql(query, params);
+return results.rows.raw();
+}
+async searchDictionary(query, options = {}) {
+const { language = 'all', limit = 20 } = options;
+code
+Code
+let sql = `
+  SELECT * FROM strongs_entries 
+  WHERE (lemma LIKE ? OR transliteration LIKE ? OR definition_short LIKE ?)
+`;
+
+const params = [`%${query}%`, `%${query}%`, `%${query}%`];
+
+if (language !== 'all') {
+  sql += ` AND strongs_number LIKE ?`;
+  params.push(language === 'greek' ? 'G%' : 'H%');
+}
+
+sql += ` ORDER BY frequency DESC LIMIT ?`;
+params.push(limit);
+
+const [results] = await this.db.executeSql(sql, params);
+return results.rows.raw();
+}
+async getWordForms(strongsNumber) {
+const query = SELECT * FROM word_forms WHERE strongs_number = ? ORDER BY form ASC;
+code
+Code
+const [results] = await this.db.executeSql(query, [strongsNumber]);
+return results.rows.raw();
+}
+async getRelatedWords(strongsNumber) {
+const entry = await this.getStrongsEntry(strongsNumber);
+if (!entry.strongs_derivation) return [];
+code
+Code
+const related = entry.strongs_derivation.split(',');
+const placeholders = related.map(() => '?').join(',');
+
+const query = `
+  SELECT * FROM strongs_entries 
+  WHERE strongs_number IN (${placeholders})
+`;
+
+const [results] = await this.db.executeSql(query, related);
+return results.rows.raw();
+}
+}
+export default DictionaryRepository;
+import NetInfo from '@react-native-community/netinfo';
+import BibleRepository from '../database/BibleRepository';
+class SyncService {
+constructor() {
+this.apiBaseUrl = 'https://api.bibleapp.com/v1';
+this.syncQueue = [];
+this.isSyncing = false;
+}
+async syncUserData() {
+const netInfo = await NetInfo.fetch();
+if (!netInfo.isConnected) {
+console.log('Offline - queuing sync');
+return false;
+}
+code
+Code
+this.isSyncing = true;
+
+try {
+  // Sync highlights
+  await this.syncHighlights();
+  // Sync notes
+  await this.syncNotes();
+  // Sync bookmarks
+  await this.syncBookmarks();
+  // Sync reading progress
+  await this.syncReadingProgress();
+  
+  // Download any new content updates
+  await this.checkContentUpdates();
+  
+  return true;
+} catch (error) {
+  console.error('Sync failed:', error);
+  return false;
+} finally {
+  this.isSyncing = false;
+}
+}
+async syncHighlights() {
+const repo = new BibleRepository();
+const unsynced = await repo.getUnsyncedHighlights();
+code
+Code
+if (unsynced.length === 0) return;
+
+const response = await fetch(`${this.apiBaseUrl}/highlights/sync`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${await this.getAuthToken()}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ highlights: unsynced }),
+});
+
+if (response.ok) {
+  const { updated } = await response.json();
+  await repo.markHighlightsSynced(updated);
+}
+}
+async checkContentUpdates() {
+const currentVersion = await this.getLocalContentVersion();
+code
+Code
+const response = await fetch(
+  `${this.apiBaseUrl}/content/updates?since=${currentVersion}`
+);
+
+if (response.ok) {
+  const updates = await response.json();
+  
+  for (const update of updates) {
+    await this.downloadContentUpdate(update);
+  }
+}
+}
+async downloadContentUpdate(update) {
+// Download new translation data, dictionary updates, etc.
+const downloadUrl = update.download_url;
+// Implementation depends on content type
+}
+async getAuthToken() {
+// Retrieve from secure storage
+return await SecureStorage.getItemAsync('auth_token');
+}
+}
+export default new SyncService();
+import BibleRepository from '../database/BibleRepository';
+class SearchService {
+constructor() {
+this.repo = new BibleRepository();
+this.searchHistory = [];
+}
+async advancedSearch(params) {
+const {
+query,
+searchType = 'all_words', // 'all_words', 'exact_phrase', 'any_words', 'regex'
+translations = ['KJV'],
+range = 'all', // 'all', 'ot', 'nt', 'gospels', 'pentateuch', etc.
+includeStrongs = false,
+dateRange = null
+} = params;
+code
+Code
+let results = [];
+
+switch (searchType) {
+  case 'exact_phrase':
+    results = await this.searchExactPhrase(query, translations, range);
+    break;
+  case 'any_words':
+    results = await this.searchAnyWords(query, translations, range);
+    break;
+  case 'strongs':
+    results = await this.searchByStrongs(query);
+    break;
+  default:
+    results = await this.searchAllWords(query, translations, range);
+}
+
+// Save to history
+this.addToHistory(query, results.length);
+
+return {
+  results,
+  totalCount: results.length,
+  query: params,
+  suggestions: this.generateSuggestions(query, results)
+};
+}
+async searchExactPhrase(phrase, translations, range) {
+// Use FTS5 phrase search
+const escaped = "${phrase.replace(/"/g, '""')}";
+return await this.repo.searchText(escaped, {
+translations,
+testament: range === 'ot' ? 'OT' : range === 'nt' ? 'NT' : null
+});
+}
+async searchAnyWords(query, translations, range) {
+const words = query.split(/\s+/);
+const orQuery = words.join(' OR ');
+return await this.repo.searchText(orQuery, { translations, testament: range });
+}
+async searchByStrongs(strongsNumber) {
+// Search by Strong's number in concordance
+const repo = new DictionaryRepository();
+return await repo.getConcordance(strongsNumber);
+}
+async semanticSearch(concept) {
+// Advanced: Use embeddings or theological taxonomy
+const topics = await this.repo.findTheologicalTopics(concept);
+const verses = [];
+code
+Code
+for (const topic of topics) {
+  const topicVerses = await this.repo.getThematicReferences(topic.id);
+  verses.push(...topicVerses);
+}
+
+return verses;
+}
+generateSuggestions(query, results) {
+if (results.length > 0) return [];
+code
+Code
+// Generate "Did you mean?" suggestions
+return [
+  this.spellCheckSuggestion(query),
+  this.rangeSuggestion(query),
+  this.translationSuggestion(query)
+].filter(Boolean);
+}
+addToHistory(query, resultCount) {
+this.searchHistory.unshift({
+query,
+resultCount,
+timestamp: new Date().toISOString()
+});
+code
+Code
+// Keep last 100
+if (this.searchHistory.length > 100) {
+  this.searchHistory = this.searchHistory.slice(0, 100);
+}
+}
+}
+export default new SearchService();
+const BOOK_ALIASES = {
+'gen': 'Gen', 'genesis': 'Gen',
+'ex': 'Exod', 'exo': 'Exod', 'exodus': 'Exod',
+'matt': 'Matt', 'matthew': 'Matt',
+'jn': 'John', 'jhn': 'John', 'john': 'John',
+// ... all 66 books
+};
+export const parseReference = (input) => {
+// Handle various formats:
+// "John 3:16", "Jn 3.16", "John 3 16", "3:16" (contextual)
+const normalized = input.trim().toLowerCase();
+// Pattern: Book Chapter:Verse-Verse or Book Chapter.Verse
+const patterns = [
+/^(\d?\s*\w+)\s+(\d+):.(?:\s*-\s*(\d+))?
+/, // John 3
+/^(?:v|verse)?\s*(\d+)$/i, // 16 (contextual)
+];
+for (const pattern of patterns) {
+const match = normalized.match(pattern);
+if (match) {
+const [, bookPart, chapter, verseStart, verseEnd] = match;
+code
+Code
+const bookOsis = normalizeBookName(bookPart);
+  if (!bookOsis) continue;
+  
+  return {
+    book: bookOsis,
+    chapter: parseInt(chapter) || 1,
+    verseStart: verseStart ? parseInt(verseStart) : null,
+    verseEnd: verseEnd ? parseInt(verseEnd) : (verseStart ? parseInt(verseStart) : null),
+    isValid: true,
+    osisRef: verseStart 
+      ? `${bookOsis}.${chapter}.${verseStart}${verseEnd ? `-${bookOsis}.${chapter}.${verseEnd}` : ''}`
+      : `${bookOsis}.${chapter}`
+  };
+}
+}
+return { isValid: false, error: 'Could not parse reference' };
+};
+const normalizeBookName = (input) => {
+const cleaned = input.replace(/\s+/g, '').toLowerCase();
+return BOOK_ALIASES[cleaned] || null;
+};
+export const generateReadingPlan = (planType, durationDays) => {
+const plans = {
+'chronological': generateChronologicalPlan,
+'canonical': generateCanonicalPlan,
+'thematic': generateThematicPlan,
+'new_testament': generateNTPlan,
+'psalms_proverbs': generateWisdomPlan
+};
+return plans[planType]?.(durationDays) || plans'canonical';
+};
+const generateCanonicalPlan = (days) => {
+// Distribute 1189 chapters across days
+const chaptersPerDay = Math.ceil(1189 / days);
+const schedule = [];
+let currentBook = 'Gen';
+let currentChapter = 1;
+for (let day = 1; day <= days; day++) {
+const dayReadings = [];
+let chaptersRemaining = chaptersPerDay;
+code
+Code
+while (chaptersRemaining > 0) {
+  dayReadings.push(`${currentBook}.${currentChapter}`);
+  currentChapter++;
+  
+  // Check if we need to move to next book
+  const bookInfo = getBookInfo(currentBook);
+  if (currentChapter > bookInfo.chapter_count) {
+    const nextBook = getNextBook(currentBook);
+    if (!nextBook) break;
+    currentBook = nextBook;
+    currentChapter = 1;
+  }
+  
+  chaptersRemaining--;
+}
+
+schedule.push({ day, readings: dayReadings });
+}
+return schedule;
+};
+import React, { useState, useEffect } from 'react';
+import {
+View,
+Text,
+FlatList,
+StyleSheet,
+TouchableOpacity,
+ActivityIndicator
+} from 'react-native';
+import { useDictionary } from '../hooks/useDictionary';
+import DictionaryRepository from '../database/DictionaryRepository';
+const ConcordanceScreen = ({ route, navigation }) => {
+const { strongsNumber } = route.params;
+const [occurrences, setOccurrences] = useState([]);
+const [loading, setLoading] = useState(true);
+const [page, setPage] = useState(0);
+const [hasMore, setHasMore] = useState(true);
+const { entry } = useDictionary(strongsNumber);
+const PAGE_SIZE = 50;
+useEffect(() => {
+loadConcordance();
+}, [strongsNumber]);
+const loadConcordance = async () => {
+setLoading(true);
+const repo = new DictionaryRepository();
+const results = await repo.getConcordance(strongsNumber, {
+limit: PAGE_SIZE,
+offset: page * PAGE_SIZE
+});
+code
+Code
+if (results.length < PAGE_SIZE) {
+  setHasMore(false);
+}
+
+setOccurrences(prev => [...prev, ...results]);
+setLoading(false);
+};
+const loadMore = () => {
+if (!hasMore || loading) return;
+setPage(p => p + 1);
+loadConcordance();
+};
+const renderOccurrence = ({ item }) => (
+<TouchableOpacity
+style={styles.occurrenceItem}
+onPress={() => navigation.navigate('Reader', {
+reference: parseOsisRef(item.osis_ref)
+})}
+>
+<Text style={styles.reference}>
+{item.book_name} {item.chapter}:{item.verse}
+</Text>
+<Text style={styles.verseText}>
+{highlightWord(item.verse_content, item.surface_form)}
+</Text>
+<Text style={styles.translation}>{item.translation}</Text>
+</TouchableOpacity>
+);
+const highlightWord = (text, word) => {
+// Simple highlighting - in production use proper regex
+return text.replace(
+new RegExp((${word}), 'gi'),
+'<mark>$1</mark>'
+);
+};
+return (
+<View style={styles.container}>
+<View style={styles.header}>
+<Text style={styles.lemma}>{entry?.lemma}</Text>
+<Text style={styles.transliteration}>{entry?.transliteration}</Text>
+<Text style={styles.stats}>
+{entry?.frequency || 0} occurrences in Bible
+</Text>
+</View>
+code
+Code
+<FlatList
+    data={occurrences}
+    renderItem={renderOccurrence}
+    keyExtractor={(item, index) => `${item.osis_ref}-${index}`}
+    onEndReached={loadMore}
+    onEndReachedThreshold={0.5}
+    ListFooterComponent={loading && <ActivityIndicator />}
+  />
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+header: {
+padding: 20,
+backgroundColor: '#f8f9fa',
+borderBottomWidth: 1,
+borderBottomColor: '#e9ecef',
+},
+lemma: {
+fontSize: 32,
+fontFamily: 'GentiumPlus',
+color: '#212529',
+},
+transliteration: {
+fontSize: 16,
+color: '#6c757d',
+fontStyle: 'italic',
+marginTop: 4,
+},
+stats: {
+fontSize: 14,
+color: '#495057',
+marginTop: 8,
+},
+occurrenceItem: {
+padding: 16,
+borderBottomWidth: 1,
+borderBottomColor: '#e9ecef',
+},
+reference: {
+fontSize: 14,
+fontWeight: '600',
+color: '#495057',
+marginBottom: 8,
+},
+verseText: {
+fontSize: 16,
+lineHeight: 24,
+color: '#212529',
+fontFamily: 'CharisSIL',
+},
+translation: {
+fontSize: 12,
+color: '#adb5bd',
+marginTop: 8,
+textTransform: 'uppercase',
+},
+});
+export default ConcordanceScreen;
+const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
+const path = require('path');
+const xml2js = require('xml2js');
+class BibleDataImporter {
+constructor(dbPath) {
+this.db = new sqlite3.Database(dbPath);
+}
+async importFromUSX(usxPath, translationCode) {
+const parser = new xml2js.Parser();
+const usxContent = fs.readFileSync(usxPath, 'utf8');
+const result = await parser.parseStringPromise(usxContent);
+code
+Code
+const translationId = await this.insertTranslation(translationCode);
+
+for (const book of result.usx.book) {
+  await this.importBook(book, translationId);
+}
+}
+async importBook(bookData, translationId) {
+const bookCode = bookData.$.code;
+const bookInfo = this.getBookInfo(bookCode);
+code
+Code
+const bookId = await this.insertBook(bookInfo);
+
+let currentChapter = 1;
+let verseNumber = 1;
+let paragraphId = 0;
+
+for (const chapter of bookData.chapter || []) {
+  currentChapter = parseInt(chapter.$.number);
+  
+  for (const node of chapter.para || []) {
+    paragraphId++;
+    
+    if (node.verse) {
+      for (const verse of node.verse) {
+        const verseNum = parseInt(verse.$.number);
+        const content = this.extractVerseText(node);
+        
+        await this.insertVerse({
+          translation_id: translationId,
+          book_id: bookId,
+          chapter: currentChapter,
+          verse: verseNum,
+          content: content,
+          osis_ref: `${bookCode}.${currentChapter}.${verseNum}`,
+          paragraph_id: paragraphId,
+          is_redletter: this.isRedLetter(node)
+        });
+      }
+    }
+  }
+}
+}
+extractVerseText(paraNode) {
+// Extract text content, handling char styles (add, bdit, etc.)
+let text = '';
+code
+Code
+if (paraNode._) {
+  text += paraNode._;
+}
+
+if (paraNode.char) {
+  for (const char of paraNode.char) {
+    text += char._ || '';
+  }
+}
+
+return text.trim();
+}
+async importStrongsData(tsvPath) {
+const lines = fs.readFileSync(tsvPath, 'utf8').split('\n');
+code
+Code
+for (const line of lines.slice(1)) { // Skip header
+  const [
+    strongs, lemma, translit, pronunciation, 
+    definition, partOfSpeech, usage
+  ] = line.split('\t');
+  
+  await this.insertStrongsEntry({
+    strongs_number: strongs,
+    lemma,
+    transliteration: translit,
+    pronunciation,
+    definition_full: definition,
+    part_of_speech: partOfSpeech,
+    kjv_usage: usage
+  });
+}
+}
+async buildConcordance(translationCode) {
+// Link verses to Strong's numbers based on morphology tags
+// This requires parsed Greek/Hebrew texts with Strong's annotations
+}
+async createIndexes() {
+const indexes = [
+'CREATE INDEX idx_verses_lookup ON verses(translation_id, book_id, chapter, verse)',
+'CREATE INDEX idx_verses_osis ON verses(osis_ref)',
+'CREATE INDEX idx_concordance_strongs ON concordance(strongs_number)',
+'CREATE VIRTUAL TABLE verse_search USING fts5(content, osis_ref UNINDEXED)'
+];
+code
+Code
+for (const index of indexes) {
+  await this.db.run(index);
+}
+}
+}
+// Usage
+const importer = new BibleDataImporter('./assets/databases/kjv.sqlite');
+importer.importFromUSX('./raw_data/kjv.usx', 'KJV');
+{
+"name": "bible-app",
+"version": "1.0.0",
+"dependencies": {
+"react": "18.2.0",
+"react-native": "0.72.0",
+code
+Code
+"react-navigation": "^6.1.9",
+"@react-navigation/native": "^6.1.9",
+"@react-navigation/stack": "^6.3.20",
+"@react-navigation/bottom-tabs": "^6.5.11",
+
+"react-native-sqlite-storage": "^6.0.1",
+"react-native-gesture-handler": "^2.14.0",
+"react-native-reanimated": "^3.6.1",
+"react-native-vector-icons": "^10.0.0",
+
+"@reduxjs/toolkit": "^2.0.1",
+"react-redux": "^9.0.4",
+
+"react-native-webview": "^13.6.3",
+"react-native-fs": "^2.20.0",
+"@react-native-community/netinfo": "^11.2.0",
+"@react-native-async-storage/async-storage": "^1.21.0",
+"react-native-keychain": "^8.1.2",
+
+"lodash": "^4.17.21",
+"moment": "^2.29.4",
+"fast-xml-parser": "^4.3.2"
+},
+"devDependencies": {
+"@babel/core": "^7.23.0",
+"@babel/runtime": "^7.23.0",
+"metro-react-native-babel-preset": "^0.77.0",
+"jest": "^29.7.0"
+}
+}
+module.exports = {
+dependencies: {
+'react-native-sqlite-storage': {
+platforms: {
+android: {
+sourceDir: '../node_modules/react-native-sqlite-storage/platforms/android-native',
+packageImportPath: 'import io.liteglue.SQLitePluginPackage;',
+packageInstance: 'new SQLitePluginPackage()'
+}
+}
+}
+},
+assets: ['./assets/fonts/']
+};
+Phase Duration Deliverables
+Foundation 2 weeks Database setup, basic reader, 1 translation
+Multi-translation 2 weeks Split screen, translation manager, sync scroll
+Dictionary 3 weeks Strong's integration, concordance, popups
+Search 2 weeks FTS implementation, advanced search UI
+Theology 2 weeks Confessions integration, topical index
+Polish 2 weeks Audio, themes, offline optimization
+npx react-native init BibleApp --template react-native-template-typescript
+cd BibleApp
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+// Screens
+import ReaderScreen from '../screens/ReaderScreen';
+import SearchScreen from '../screens/SearchScreen';
+import LibraryScreen from '../screens/LibraryScreen';
+import DictionaryScreen from '../screens/DictionaryScreen';
+import ConcordanceScreen from '../screens/ConcordanceScreen';
+import TheologyScreen from '../screens/TheologyScreen';
+import SettingsScreen from '../screens/SettingsScreen';
+import NoteEditorScreen from '../screens/NoteEditorScreen';
+import ReadingPlanScreen from '../screens/ReadingPlanScreen';
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+function ReaderStack() {
+return (
+<Stack.Navigator>
+<Stack.Screen
+name="ReaderMain"
+component={ReaderScreen}
+options={{ headerShown: false }}
+/>
+<Stack.Screen
+name="Concordance"
+component={ConcordanceScreen}
+options={({ route }) => ({
+title: Strong's ${route.params.strongsNumber}
+})}
+/>
+<Stack.Screen
+name="NoteEditor"
+component={NoteEditorScreen}
+options={{ title: 'Note' }}
+/>
+</Stack.Navigator>
+);
+}
+function SearchStack() {
+return (
+<Stack.Navigator>
+<Stack.Screen
+name="SearchMain"
+component={SearchScreen}
+options={{ title: 'Search' }}
+/>
+<Stack.Screen
+name="SearchResults"
+component={SearchResultsScreen}
+options={{ title: 'Results' }}
+/>
+</Stack.Navigator>
+);
+}
+function LibraryStack() {
+return (
+<Stack.Navigator>
+<Stack.Screen
+name="LibraryMain"
+component={LibraryScreen}
+options={{ title: 'Library' }}
+/>
+<Stack.Screen
+name="TranslationDetail"
+component={TranslationDetailScreen}
+/>
+<Stack.Screen
+name="ReadingPlan"
+component={ReadingPlanScreen}
+/>
+</Stack.Navigator>
+);
+}
+function TheologyStack() {
+return (
+<Stack.Navigator>
+<Stack.Screen
+name="TheologyMain"
+component={TheologyScreen}
+options={{ title: 'Theology' }}
+/>
+<Stack.Screen
+name="TopicDetail"
+component={TopicDetailScreen}
+/>
+<Stack.Screen
+name="ConfessionArticle"
+component={ConfessionArticleScreen}
+/>
+</Stack.Navigator>
+);
+}
+export default function AppNavigator() {
+return (
+<NavigationContainer>
+<Tab.Navigator
+screenOptions={({ route }) => ({
+tabBarIcon: ({ focused, color, size }) => {
+let iconName;
+switch (route.name) {
+case 'Reader': iconName = 'book-open-variant'; break;
+case 'Search': iconName = 'magnify'; break;
+case 'Library': iconName = 'library'; break;
+case 'Theology': iconName = 'school'; break;
+case 'Settings': iconName = 'cog'; break;
+}
+return <Icon name={iconName} size={size} color={color} />;
+},
+tabBarActiveTintColor: '#8B0000',
+tabBarInactiveTintColor: 'gray',
+})}
+>
+<Tab.Screen name="Reader" component={ReaderStack} />
+<Tab.Screen name="Search" component={SearchStack} />
+<Tab.Screen name="Library" component={LibraryStack} />
+<Tab.Screen name="Theology" component={TheologyStack} />
+<Tab.Screen name="Settings" component={SettingsScreen} />
+</Tab.Navigator>
+</NavigationContainer>
+);
+}
+import React, { useState, useRef, useCallback } from 'react';
+import {
+View,
+StyleSheet,
+StatusBar,
+Dimensions,
+Animated,
+PanResponder
+} from 'react-native';
+import SplitScreen from '../components/reader/SplitScreen';
+import BiblePane from '../components/reader/BiblePane';
+import ReaderToolbar from '../components/reader/ReaderToolbar';
+import QuickNav from '../components/navigation/QuickNav';
+import { useBibleData } from '../hooks/useBibleData';
+import GestureRecognizer from 'react-native-swipe-gestures';
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const ReaderScreen = ({ navigation }) => {
+const [isSplitScreen, setIsSplitScreen] = useState(false);
+const [showNav, setShowNav] = useState(false);
+const [fontSize, setFontSize] = useState(18);
+const [currentReference, setCurrentReference] = useState({
+book: 'John',
+chapter: 3,
+verse: 16
+});
+const [activeTranslations, setActiveTranslations] = useState(['KJV', 'ESV']);
+const slideAnim = useRef(new Animated.Value(-300)).current;
+// Swipe gestures for chapter navigation
+const onSwipeLeft = () => {
+nextChapter();
+};
+const onSwipeRight = () => {
+previousChapter();
+};
+const nextChapter = () => {
+const { book, chapter } = currentReference;
+// Logic to determine next chapter (handle book boundaries)
+setCurrentReference({ book, chapter: chapter + 1 });
+};
+const previousChapter = () => {
+const { book, chapter } = currentReference;
+if (chapter > 1) {
+setCurrentReference({ book, chapter: chapter - 1 });
+}
+};
+const toggleNavigation = () => {
+setShowNav(!showNav);
+Animated.spring(slideAnim, {
+toValue: showNav ? -300 : 0,
+useNativeDriver: true
+}).start();
+};
+const handleReferenceChange = (newRef) => {
+setCurrentReference(newRef);
+setShowNav(false);
+Animated.spring(slideAnim, {
+toValue: -300,
+useNativeDriver: true
+}).start();
+};
+const handleAddTranslation = (translation) => {
+if (activeTranslations.length < 3) {
+setActiveTranslations([...activeTranslations, translation]);
+setIsSplitScreen(true);
+}
+};
+const handleRemoveTranslation = (index) => {
+const newTranslations = activeTranslations.filter((_, i) => i !== index);
+setActiveTranslations(newTranslations);
+if (newTranslations.length === 1) {
+setIsSplitScreen(false);
+}
+};
+return (
+<View style={styles.container}>
+<StatusBar barStyle="dark-content" />
+code
+Code
+<ReaderToolbar
+    currentReference={currentReference}
+    onNavPress={toggleNavigation}
+    onSearchPress={() => navigation.navigate('Search')}
+    onSettingsPress={() => {/* Show settings modal */}}
+    onAddTranslation={() => {/* Show translation picker */}}
+    activeTranslations={activeTranslations}
+    isSplitScreen={isSplitScreen}
+    onToggleSplit={() => setIsSplitScreen(!isSplitScreen)}
+  />
+
+  <GestureRecognizer
+    onSwipeLeft={onSwipeLeft}
+    onSwipeRight={onSwipeRight}
+    config={{ velocityThreshold: 0.3, directionalOffsetThreshold: 80 }}
+    style={styles.gestureContainer}
+  >
+    {isSplitScreen ? (
+      <SplitScreen
+        translations={activeTranslations}
+        reference={currentReference}
+        fontSize={fontSize}
+        onReferenceChange={handleReferenceChange}
+        onRemoveTranslation={handleRemoveTranslation}
+      />
+    ) : (
+      <BiblePane
+        translation={activeTranslations[0]}
+        reference={currentReference}
+        fontSize={fontSize}
+        onReferenceChange={handleReferenceChange}
+        onVerseSelect={(verse) => {
+          // Show verse action menu
+        }}
+      />
+    )}
+  </GestureRecognizer>
+
+  <Animated.View 
+    style={[
+      styles.navDrawer,
+      { transform: [{ translateX: slideAnim }] }
+    ]}
+  >
+    <QuickNav
+      currentReference={currentReference}
+      onSelect={handleReferenceChange}
+    />
+  </Animated.View>
+
+  {/* Font Size Slider Modal (conditionally rendered) */}
+  {/* Audio Player Controls (floating) */}
+  {/* Verse Action Popup */}
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+gestureContainer: {
+flex: 1,
+},
+navDrawer: {
+position: 'absolute',
+left: 0,
+top: 60,
+bottom: 0,
+width: 300,
+backgroundColor: '#fff',
+shadowColor: '#000',
+shadowOffset: { width: 2, height: 0 },
+shadowOpacity: 0.25,
+shadowRadius: 3.84,
+elevation: 5,
+zIndex: 100,
+},
+});
+export default ReaderScreen;
+import React from 'react';
+import {
+View,
+Text,
+StyleSheet,
+TouchableOpacity,
+Animated
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+const ReaderToolbar = ({
+currentReference,
+onNavPress,
+onSearchPress,
+onSettingsPress,
+onAddTranslation,
+activeTranslations,
+isSplitScreen,
+onToggleSplit
+}) => {
+return (
+<View style={styles.container}>
+<View style={styles.topRow}>
+<TouchableOpacity onPress={onNavPress} style={styles.navButton}>
+<Icon name="menu" size={24} color="#333" />
+<Text style={styles.referenceText}>
+{currentReference.book} {currentReference.chapter}
+</Text>
+</TouchableOpacity>
+code
+Code
+<View style={styles.actions}>
+      <TouchableOpacity onPress={onSearchPress} style={styles.iconButton}>
+        <Icon name="magnify" size={24} color="#333" />
+      </TouchableOpacity>
+      
+      <TouchableOpacity onPress={onToggleSplit} style={styles.iconButton}>
+        <Icon 
+          name={isSplitScreen ? "book-multiple" : "book"} 
+          size={24} 
+          color={isSplitScreen ? "#8B0000" : "#333"} 
+        />
+      </TouchableOpacity>
+      
+      <TouchableOpacity onPress={onSettingsPress} style={styles.iconButton}>
+        <Icon name="cog" size={24} color="#333" />
+      </TouchableOpacity>
+    </View>
+  </View>
+
+  {isSplitScreen && (
+    <View style={styles.translationBar}>
+      {activeTranslations.map((trans, index) => (
+        <View key={index} style={styles.translationChip}>
+          <Text style={styles.chipText}>{trans}</Text>
+          {activeTranslations.length > 1 && (
+            <TouchableOpacity 
+              onPress={() => onRemoveTranslation(index)}
+              style={styles.removeChip}
+            >
+              <Icon name="close" size={14} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+      
+      {activeTranslations.length < 3 && (
+        <TouchableOpacity 
+          onPress={onAddTranslation}
+          style={styles.addChip}
+        >
+          <Icon name="plus" size={16} color="#8B0000" />
+          <Text style={styles.addChipText}>Add</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  )}
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+backgroundColor: '#fff',
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+paddingTop: 8,
+},
+topRow: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+paddingHorizontal: 16,
+paddingBottom: 8,
+},
+navButton: {
+flexDirection: 'row',
+alignItems: 'center',
+},
+referenceText: {
+fontSize: 18,
+fontWeight: '600',
+marginLeft: 8,
+fontFamily: 'Georgia',
+},
+actions: {
+flexDirection: 'row',
+},
+iconButton: {
+padding: 8,
+marginLeft: 8,
+},
+translationBar: {
+flexDirection: 'row',
+paddingHorizontal: 16,
+paddingBottom: 8,
+borderTopWidth: 1,
+borderTopColor: '#f0f0f0',
+paddingTop: 8,
+},
+translationChip: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#f0f0f0',
+paddingHorizontal: 12,
+paddingVertical: 4,
+borderRadius: 16,
+marginRight: 8,
+},
+chipText: {
+fontSize: 12,
+fontWeight: '500',
+color: '#333',
+},
+removeChip: {
+marginLeft: 4,
+padding: 2,
+},
+addChip: {
+flexDirection: 'row',
+alignItems: 'center',
+borderWidth: 1,
+borderColor: '#8B0000',
+borderStyle: 'dashed',
+paddingHorizontal: 12,
+paddingVertical: 4,
+borderRadius: 16,
+},
+addChipText: {
+fontSize: 12,
+color: '#8B0000',
+marginLeft: 4,
+},
+});
+export default ReaderToolbar;
+import React, { useState } from 'react';
+import {
+View,
+Text,
+StyleSheet,
+TouchableOpacity,
+ScrollView,
+TextInput
+} from 'react-native';
+import { BOOKS } from '../../constants/books';
+const QuickNav = ({ currentReference, onSelect }) => {
+const [selectedTestament, setSelectedTestament] = useState('NT');
+const [searchQuery, setSearchQuery] = useState('');
+const [expandedBook, setExpandedBook] = useState(null);
+const books = BOOKS.filter(b => b.testament === selectedTestament);
+const filteredBooks = searchQuery
+? books.filter(b =>
+b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+b.abbreviation.toLowerCase().includes(searchQuery.toLowerCase())
+)
+: books;
+const handleBookPress = (book) => {
+if (expandedBook === book.osis_code) {
+setExpandedBook(null);
+} else {
+setExpandedBook(book.osis_code);
+}
+};
+const handleChapterPress = (book, chapter) => {
+onSelect({ book: book.osis_code, chapter, verse: 1 });
+};
+const renderChapterGrid = (book) => {
+const chapters = Array.from({ length: book.chapter_count }, (_, i) => i + 1);
+code
+Code
+return (
+  <View style={styles.chapterGrid}>
+    {chapters.map(chapter => (
+      <TouchableOpacity
+        key={chapter}
+        style={[
+          styles.chapterButton,
+          currentReference.book === book.osis_code && 
+          currentReference.chapter === chapter && 
+          styles.activeChapter
+        ]}
+        onPress={() => handleChapterPress(book, chapter)}
+      >
+        <Text style={[
+          styles.chapterText,
+          currentReference.book === book.osis_code && 
+          currentReference.chapter === chapter && 
+          styles.activeChapterText
+        ]}>
+          {chapter}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+);
+};
+return (
+<View style={styles.container}>
+<View style={styles.testamentTabs}>
+<TouchableOpacity
+style={[
+styles.tab,
+selectedTestament === 'OT' && styles.activeTab
+]}
+onPress={() => setSelectedTestament('OT')}
+>
+<Text style={[
+styles.tabText,
+selectedTestament === 'OT' && styles.activeTabText
+]}>Old Testament</Text>
+</TouchableOpacity>
+code
+Code
+<TouchableOpacity 
+      style={[
+        styles.tab,
+        selectedTestament === 'NT' && styles.activeTab
+      ]}
+      onPress={() => setSelectedTestament('NT')}
+    >
+      <Text style={[
+        styles.tabText,
+        selectedTestament === 'NT' && styles.activeTabText
+      ]}>New Testament</Text>
+    </TouchableOpacity>
+  </View>
+
+  <TextInput
+    style={styles.searchInput}
+    placeholder="Find book..."
+    value={searchQuery}
+    onChangeText={setSearchQuery}
+  />
+
+  <ScrollView style={styles.bookList}>
+    {filteredBooks.map(book => (
+      <View key={book.osis_code}>
+        <TouchableOpacity 
+          style={styles.bookButton}
+          onPress={() => handleBookPress(book)}
+        >
+          <Text style={styles.bookName}>{book.name}</Text>
+          <Text style={styles.bookAbbrev}>{book.abbreviation}</Text>
+        </TouchableOpacity>
+        
+        {expandedBook === book.osis_code && renderChapterGrid(book)}
+      </View>
+    ))}
+  </ScrollView>
+
+  {/* Quick jump to verse input */}
+  <View style={styles.quickJump}>
+    <Text style={styles.quickJumpLabel}>Go to:</Text>
+    <TextInput 
+      style={styles.quickJumpInput}
+      placeholder="e.g., John 3:16"
+      onSubmitEditing={(e) => {
+        // Parse reference and navigate
+        const parsed = parseReference(e.nativeEvent.text);
+        if (parsed.isValid) onSelect(parsed);
+      }}
+    />
+  </View>
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+testamentTabs: {
+flexDirection: 'row',
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+},
+tab: {
+flex: 1,
+paddingVertical: 12,
+alignItems: 'center',
+},
+activeTab: {
+borderBottomWidth: 2,
+borderBottomColor: '#8B0000',
+},
+tabText: {
+fontSize: 14,
+color: '#666',
+},
+activeTabText: {
+color: '#8B0000',
+fontWeight: '600',
+},
+searchInput: {
+margin: 12,
+padding: 10,
+backgroundColor: '#f5f5f5',
+borderRadius: 8,
+fontSize: 16,
+},
+bookList: {
+flex: 1,
+},
+bookButton: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+padding: 16,
+borderBottomWidth: 1,
+borderBottomColor: '#f0f0f0',
+},
+bookName: {
+fontSize: 16,
+fontFamily: 'Georgia',
+},
+bookAbbrev: {
+fontSize: 12,
+color: '#999',
+},
+chapterGrid: {
+flexDirection: 'row',
+flexWrap: 'wrap',
+padding: 12,
+backgroundColor: '#fafafa',
+},
+chapterButton: {
+width: 44,
+height: 44,
+justifyContent: 'center',
+alignItems: 'center',
+margin: 4,
+backgroundColor: '#fff',
+borderRadius: 8,
+borderWidth: 1,
+borderColor: '#e0e0e0',
+},
+activeChapter: {
+backgroundColor: '#8B0000',
+borderColor: '#8B0000',
+},
+chapterText: {
+fontSize: 14,
+color: '#333',
+},
+activeChapterText: {
+color: '#fff',
+fontWeight: '600',
+},
+quickJump: {
+padding: 12,
+borderTopWidth: 1,
+borderTopColor: '#e0e0e0',
+},
+quickJumpLabel: {
+fontSize: 12,
+color: '#666',
+marginBottom: 4,
+},
+quickJumpInput: {
+padding: 10,
+backgroundColor: '#f5f5f5',
+borderRadius: 8,
+fontSize: 16,
+},
+});
+export default QuickNav;
+import React, { useState, useCallback } from 'react';
+import {
+View,
+Text,
+TextInput,
+StyleSheet,
+FlatList,
+TouchableOpacity,
+Switch,
+ActivityIndicator
+} from 'react-native';
+import { useSearch } from '../hooks/useSearch';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+const SearchScreen = ({ navigation }) => {
+const [query, setQuery] = useState('');
+const [searchType, setSearchType] = useState('all_words'); // all_words, exact, any, strongs
+const [selectedTranslations, setSelectedTranslations] = useState(['KJV']);
+const [range, setRange] = useState('all');
+const [includeStrongs, setIncludeStrongs] = useState(false);
+const { results, loading, error, search, hasMore, loadMore } = useSearch();
+const handleSearch = () => {
+if (!query.trim()) return;
+code
+Code
+search({
+  query: query.trim(),
+  searchType,
+  translations: selectedTranslations,
+  range,
+  includeStrongs
+});
+};
+const toggleTranslation = (trans) => {
+if (selectedTranslations.includes(trans)) {
+setSelectedTranslations(selectedTranslations.filter(t => t !== trans));
+} else {
+setSelectedTranslations([...selectedTranslations, trans]);
+}
+};
+const renderFilterSection = () => (
+<View style={styles.filters}>
+<Text style={styles.filterTitle}>Search Type</Text>
+<View style={styles.chipGroup}>
+{[
+{ key: 'all_words', label: 'All Words' },
+{ key: 'exact', label: 'Exact Phrase' },
+{ key: 'any', label: 'Any Word' },
+{ key: 'strongs', label: "Strong's #" }
+].map(type => (
+<TouchableOpacity
+key={type.key}
+style={[
+styles.chip,
+searchType === type.key && styles.activeChip
+]}
+onPress={() => setSearchType(type.key)}
+>
+<Text style={[
+styles.chipText,
+searchType === type.key && styles.activeChipText
+]}>
+{type.label}
+</Text>
+</TouchableOpacity>
+))}
+</View>
+code
+Code
+<Text style={styles.filterTitle}>Translations</Text>
+  <View style={styles.chipGroup}>
+    {['KJV', 'ESV', 'NIV', 'NASB', 'SBLGNT'].map(trans => (
+      <TouchableOpacity
+        key={trans}
+        style={[
+          styles.chip,
+          selectedTranslations.includes(trans) && styles.activeChip
+        ]}
+        onPress={() => toggleTranslation(trans)}
+      >
+        <Text style={[
+          styles.chipText,
+          selectedTranslations.includes(trans) && styles.activeChipText
+        ]}>
+          {trans}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+
+  <Text style={styles.filterTitle}>Range</Text>
+  <View style={styles.chipGroup}>
+    {[
+      { key: 'all', label: 'All' },
+      { key: 'ot', label: 'Old Testament' },
+      { key: 'nt', label: 'New Testament' },
+      { key: 'gospels', label: 'Gospels' },
+      { key: 'paul', label: 'Pauline Epistles' }
+    ].map(r => (
+      <TouchableOpacity
+        key={r.key}
+        style={[
+          styles.chip,
+          range === r.key && styles.activeChip
+        ]}
+        onPress={() => setRange(r.key)}
+      >
+        <Text style={[
+          styles.chipText,
+          range === r.key && styles.activeChipText
+        ]}>
+          {r.label}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+
+  <View style={styles.switchRow}>
+    <Text>Include Strong's matches</Text>
+    <Switch
+      value={includeStrongs}
+      onValueChange={setIncludeStrongs}
+    />
+  </View>
+</View>
+);
+const renderResult = ({ item }) => (
+<TouchableOpacity
+style={styles.resultItem}
+onPress={() => navigation.navigate('Reader', {
+reference: parseOsisRef(item.osis_ref)
+})}
+>
+<View style={styles.resultHeader}>
+<Text style={styles.reference}>
+{item.book_name} {item.chapter}:{item.verse}
+</Text>
+<Text style={styles.translation}>{item.translation}</Text>
+</View>
+code
+Code
+<Text 
+    style={styles.resultText}
+    numberOfLines={3}
+    ellipsizeMode="tail"
+  >
+    {item.highlighted_content || item.content}
+  </Text>
+  
+  {item.strongs_matches && (
+    <View style={styles.strongsTags}>
+      {item.strongs_matches.map(s => (
+        <View key={s} style={styles.strongsTag}>
+          <Text style={styles.strongsText}>{s}</Text>
+        </View>
+      ))}
+    </View>
+  )}
+</TouchableOpacity>
+);
+return (
+<View style={styles.container}>
+<View style={styles.searchBar}>
+<Icon name="magnify" size={24} color="#666" />
+<TextInput
+style={styles.searchInput}
+placeholder="Search Scripture..."
+value={query}
+onChangeText={setQuery}
+onSubmitEditing={handleSearch}
+returnKeyType="search"
+/>
+{query.length > 0 && (
+<TouchableOpacity onPress={() => setQuery('')}>
+<Icon name="close-circle" size={20} color="#666" />
+</TouchableOpacity>
+)}
+</View>
+code
+Code
+{results.length === 0 && !loading && renderFilterSection()}
+
+  {loading && results.length === 0 && (
+    <ActivityIndicator style={styles.loader} size="large" />
+  )}
+
+  <FlatList
+    data={results}
+    renderItem={renderResult}
+    keyExtractor={(item, index) => `${item.id}-${index}`}
+    onEndReached={loadMore}
+    onEndReachedThreshold={0.5}
+    ListFooterComponent={loading && results.length > 0 ? <ActivityIndicator /> : null}
+    ListEmptyComponent={
+      !loading && query.length > 0 ? (
+        <View style={styles.emptyState}>
+          <Text>No results found</Text>
+          <Text style={styles.emptySubtext}>
+            Try adjusting your search terms or filters
+          </Text>
+        </View>
+      ) : null
+    }
+  />
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+searchBar: {
+flexDirection: 'row',
+alignItems: 'center',
+padding: 12,
+backgroundColor: '#f5f5f5',
+margin: 12,
+borderRadius: 8,
+},
+searchInput: {
+flex: 1,
+marginLeft: 8,
+fontSize: 16,
+},
+filters: {
+padding: 16,
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+},
+filterTitle: {
+fontSize: 12,
+fontWeight: '600',
+color: '#666',
+textTransform: 'uppercase',
+marginTop: 16,
+marginBottom: 8,
+},
+chipGroup: {
+flexDirection: 'row',
+flexWrap: 'wrap',
+},
+chip: {
+paddingHorizontal: 12,
+paddingVertical: 6,
+borderRadius: 16,
+backgroundColor: '#f0f0f0',
+marginRight: 8,
+marginBottom: 8,
+},
+activeChip: {
+backgroundColor: '#8B0000',
+},
+chipText: {
+fontSize: 13,
+color: '#333',
+},
+activeChipText: {
+color: '#fff',
+},
+switchRow: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+marginTop: 16,
+paddingTop: 16,
+borderTopWidth: 1,
+borderTopColor: '#e0e0e0',
+},
+resultItem: {
+padding: 16,
+borderBottomWidth: 1,
+borderBottomColor: '#f0f0f0',
+},
+resultHeader: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+marginBottom: 8,
+},
+reference: {
+fontSize: 14,
+fontWeight: '600',
+color: '#8B0000',
+},
+translation: {
+fontSize: 12,
+color: '#999',
+backgroundColor: '#f0f0f0',
+paddingHorizontal: 6,
+paddingVertical: 2,
+borderRadius: 4,
+},
+resultText: {
+fontSize: 15,
+lineHeight: 22,
+color: '#333',
+fontFamily: 'CharisSIL',
+},
+strongsTags: {
+flexDirection: 'row',
+marginTop: 8,
+},
+strongsTag: {
+backgroundColor: '#E3F2FD',
+paddingHorizontal: 8,
+paddingVertical: 2,
+borderRadius: 4,
+marginRight: 6,
+},
+strongsText: {
+fontSize: 11,
+color: '#1976D2',
+},
+loader: {
+marginTop: 40,
+},
+emptyState: {
+alignItems: 'center',
+marginTop: 60,
+},
+emptySubtext: {
+color: '#999',
+marginTop: 8,
+},
+});
+export default SearchScreen;
+import React, { useState, useEffect } from 'react';
+import {
+View,
+Text,
+StyleSheet,
+SectionList,
+TouchableOpacity,
+TextInput,
+ScrollView
+} from 'react-native';
+import { useTheology } from '../hooks/useTheology';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+const TheologyScreen = ({ navigation }) => {
+const [activeTab, setActiveTab] = useState('topics'); // topics, confessions, catechisms
+const [searchQuery, setSearchQuery] = useState('');
+const { topics, confessions, catechisms, loading } = useTheology();
+const renderTopics = () => {
+const categories = groupBy(topics, 'category');
+code
+Code
+return (
+  <SectionList
+    sections={Object.entries(categories).map(([title, data]) => ({
+      title,
+      data
+    }))}
+    keyExtractor={item => item.id}
+    renderSectionHeader={({ section }) => (
+      <Text style={styles.sectionHeader}>{section.title}</Text>
+    )}
+    renderItem={({ item }) => (
+      <TouchableOpacity 
+        style={styles.topicItem}
+        onPress={() => navigation.navigate('TopicDetail', { topicId: item.id })}
+      >
+        <Text style={styles.topicTitle}>{item.title}</Text>
+        <Text style={styles.topicSummary} numberOfLines={2}>
+          {item.summary}
+        </Text>
+        <View style={styles.topicMeta}>
+          <Text style={styles.verseCount}>
+            {JSON.parse(item.scripture_refs).length} verses
+          </Text>
+          <Icon name="chevron-right" size={20} color="#ccc" />
+        </View>
+      </TouchableOpacity>
+    )}
+  />
+);
+};
+const renderConfessions = () => (
+<ScrollView>
+{confessions.map(confession => (
+<View key={confession.id} style={styles.confessionCard}>
+<Text style={styles.confessionTitle}>{confession.name}</Text>
+<Text style={styles.confessionYear}>{confession.year}</Text>
+code
+Code
+<View style={styles.chapterList}>
+        {confession.chapters.map(chapter => (
+          <TouchableOpacity
+            key={chapter.number}
+            style={styles.chapterButton}
+            onPress={() => navigation.navigate('ConfessionArticle', {
+              confessionId: confession.id,
+              chapter: chapter.number
+            })}
+          >
+            <Text style={styles.chapterNumber}>Chapter {chapter.number}</Text>
+            <Text style={styles.chapterTitle} numberOfLines={1}>
+              {chapter.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  ))}
+</ScrollView>
+);
+const renderCatechisms = () => (
+<View>
+{catechisms.map(catechism => (
+<TouchableOpacity
+key={catechism.id}
+style={styles.catechismCard}
+onPress={() => navigation.navigate('Catechism', {
+catechismId: catechism.id
+})}
+>
+<Text style={styles.catechismTitle}>{catechism.name}</Text>
+<Text style={styles.catechismSubtitle}>
+{catechism.question_count} questions
+</Text>
+</TouchableOpacity>
+))}
+</View>
+);
+return (
+<View style={styles.container}>
+<View style={styles.tabBar}>
+<TouchableOpacity
+style={[styles.tab, activeTab === 'topics' && styles.activeTab]}
+onPress={() => setActiveTab('topics')}
+>
+<Text style={[
+styles.tabText,
+activeTab === 'topics' && styles.activeTabText
+]}>
+Topics
+</Text>
+</TouchableOpacity>
+code
+Code
+<TouchableOpacity 
+      style={[styles.tab, activeTab === 'confessions' && styles.activeTab]}
+      onPress={() => setActiveTab('confessions')}
+    >
+      <Text style={[
+        styles.tabText, 
+        activeTab === 'confessions' && styles.activeTabText
+      ]}>
+        Confessions
+      </Text>
+    </TouchableOpacity>
+    
+    <TouchableOpacity 
+      style={[styles.tab, activeTab === 'catechisms' && styles.activeTab]}
+      onPress={() => setActiveTab('catechisms')}
+    >
+      <Text style={[
+        styles.tabText, 
+        activeTab === 'catechisms' && styles.activeTabText
+      ]}>
+        Catechisms
+      </Text>
+    </TouchableOpacity>
+  </View>
+
+  <TextInput
+    style={styles.searchInput}
+    placeholder="Search theology..."
+    value={searchQuery}
+    onChangeText={setSearchQuery}
+  />
+
+  {activeTab === 'topics' && renderTopics()}
+  {activeTab === 'confessions' && renderConfessions()}
+  {activeTab === 'catechisms' && renderCatechisms()}
+</View>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#fff',
+},
+tabBar: {
+flexDirection: 'row',
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+},
+tab: {
+flex: 1,
+paddingVertical: 16,
+alignItems: 'center',
+},
+activeTab: {
+borderBottomWidth: 2,
+borderBottomColor: '#8B0000',
+},
+tabText: {
+fontSize: 14,
+color: '#666',
+},
+activeTabText: {
+color: '#8B0000',
+fontWeight: '600',
+},
+searchInput: {
+margin: 12,
+padding: 12,
+backgroundColor: '#f5f5f5',
+borderRadius: 8,
+fontSize: 16,
+},
+sectionHeader: {
+backgroundColor: '#f8f9fa',
+padding: 12,
+fontSize: 13,
+fontWeight: '600',
+color: '#666',
+textTransform: 'uppercase',
+},
+topicItem: {
+padding: 16,
+borderBottomWidth: 1,
+borderBottomColor: '#f0f0f0',
+},
+topicTitle: {
+fontSize: 17,
+fontWeight: '600',
+color: '#333',
+marginBottom: 4,
+},
+topicSummary: {
+fontSize: 14,
+color: '#666',
+lineHeight: 20,
+marginBottom: 8,
+},
+topicMeta: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+},
+verseCount: {
+fontSize: 12,
+color: '#8B0000',
+},
+confessionCard: {
+margin: 12,
+padding: 16,
+backgroundColor: '#f8f9fa',
+borderRadius: 12,
+},
+confessionTitle: {
+fontSize: 20,
+fontWeight: '700',
+color: '#333',
+},
+confessionYear: {
+fontSize: 14,
+color: '#666',
+marginTop: 4,
+},
+chapterList: {
+marginTop: 12,
+},
+chapterButton: {
+flexDirection: 'row',
+alignItems: 'center',
+paddingVertical: 10,
+borderBottomWidth: 1,
+borderBottomColor: '#e0e0e0',
+},
+chapterNumber: {
+width: 80,
+fontSize: 13,
+color: '#8B0000',
+fontWeight: '500',
+},
+chapterTitle: {
+flex: 1,
+fontSize: 14,
+color: '#333',
+},
+catechismCard: {
+margin: 12,
+padding: 20,
+backgroundColor: '#f8f9fa',
+borderRadius: 12,
+borderLeftWidth: 4,
+borderLeftColor: '#8B0000',
+},
+catechismTitle: {
+fontSize: 18,
+fontWeight: '600',
+color: '#333',
+},
+catechismSubtitle: {
+fontSize: 13,
+color: '#666',
+marginTop: 4,
+},
+});
+export default TheologyScreen;
+import React, { useState } from 'react';
+import {
+View,
+Text,
+StyleSheet,
+ScrollView,
+TouchableOpacity,
+Switch,
+Alert
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import SyncService from '../services/SyncService';
+const SettingsScreen = () => {
+const [settings, setSettings] = useState({
+darkMode: false,
+fontSize: 18,
+lineHeight: 1.6,
+fontFamily: 'CharisSIL',
+redLetters: true,
+verseNumbers: true,
+crossReferences: true,
+footnotes: true,
+strongsNumbers: false,
+autoSync: true,
+downloadAudio: false,
+notifications: true,
+readingReminders: false
+});
+const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, success, error
+const toggleSetting = (key) => {
+setSettings({ ...settings, [key]: !settings[key] });
+};
+const handleSync = async () => {
+setSyncStatus('syncing');
+try {
+const success = await SyncService.syncUserData();
+setSyncStatus(success ? 'success' : 'error');
+setTimeout(() => setSyncStatus('idle'), 2000);
+} catch (error) {
+setSyncStatus('error');
+}
+};
+const handleDownloadTranslation = (translation) => {
+Alert.alert(
+'Download Translation',
+Download ${translation.name} (${translation.size})?,
+[
+{ text: 'Cancel', style: 'cancel' },
+{
+text: 'Download',
+onPress: () => {
+// Start download
+}
+}
+]
+);
+};
+const renderSettingItem = (icon, title, value, onPress, type = 'navigate') => (
+<TouchableOpacity style={styles.settingItem} onPress={onPress}>
+<View style={styles.settingLeft}>
+<Icon name={icon} size={22} color="#666" />
+<Text style={styles.settingTitle}>{title}</Text>
+</View>
+code
+Code
+{type === 'toggle' ? (
+    <Switch
+      value={value}
+      onValueChange={onPress}
+      trackColor={{ false: '#ccc', true: '#8B0000' }}
+    />
+  ) : type === 'value' ? (
+    <Text style={styles.settingValue}>{value}</Text>
+  ) : (
+    <Icon name="chevron-right" size={20} color="#ccc" />
+  )}
+</TouchableOpacity>
+);
+return (
+<ScrollView style={styles.container}>
+<View style={styles.section}>
+<Text style={styles.sectionTitle}>Account & Sync</Text>
+code
+Code
+<TouchableOpacity 
+      style={styles.syncButton}
+      onPress={handleSync}
+      disabled={syncStatus === 'syncing'}
+    >
+      <Icon 
+        name={syncStatus === 'syncing' ? 'sync' : 'cloud-sync'} 
+        size={24} 
+        color="#fff" 
+      />
+      <Text style={styles.syncButtonText}>
+        {syncStatus === 'syncing' ? 'Syncing...' : 
+         syncStatus === 'success' ? 'Synced!' : 
+         syncStatus === 'error' ? 'Sync Failed' : 
+         'Sync Now'}
+      </Text>
+    </TouchableOpacity>
+
+    {renderSettingItem(
+      'bell-outline', 
+      'Notifications', 
+      null, 
+      () => {},
+      'navigate'
+    )}
+    
+    {renderSettingItem(
+      'auto-sync', 
+      'Auto Sync', 
+      settings.autoSync, 
+      () => toggleSetting('autoSync'),
+      'toggle'
+    )}
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Reading Preferences</Text>
+    
+    {renderSettingItem(
+      'format-font', 
+      'Font Size', 
+      `${settings.fontSize}pt`, 
+      () => {/* Show font picker */},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'format-line-spacing', 
+      'Line Height', 
+      `${settings.lineHeight}x`, 
+      () => {},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'format-font-family', 
+      'Font Family', 
+      settings.fontFamily, 
+      () => {},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'format-color-fill', 
+      'Dark Mode', 
+      settings.darkMode, 
+      () => toggleSetting('darkMode'),
+      'toggle'
+    )}
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Display Options</Text>
+    
+    {renderSettingItem(
+      'alpha-r-circle', 
+      'Red Letters', 
+      settings.redLetters, 
+      () => toggleSetting('redLetters'),
+      'toggle'
+    )}
+    
+    {renderSettingItem(
+      'format-list-numbered', 
+      'Verse Numbers', 
+      settings.verseNumbers, 
+      () => toggleSetting('verseNumbers'),
+      'toggle'
+    )}
+    
+    {renderSettingItem(
+      'arrow-expand-horizontal', 
+      'Cross References', 
+      settings.crossReferences, 
+      () => toggleSetting('crossReferences'),
+      'toggle'
+    )}
+    
+    {renderSettingItem(
+      'note-text', 
+      'Footnotes', 
+      settings.footnotes, 
+      () => toggleSetting('footnotes'),
+      'toggle'
+    )}
+    
+    {renderSettingItem(
+      'pound', 
+      "Strong's Numbers", 
+      settings.strongsNumbers, 
+      () => toggleSetting('strongsNumbers'),
+      'toggle'
+    )}
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Downloads</Text>
+    
+    {renderSettingItem(
+      'download', 
+      'Manage Translations', 
+      '3 installed', 
+      () => {},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'headphones', 
+      'Audio Bibles', 
+      '1.2 GB available', 
+      () => {},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'book-open-page-variant', 
+      'Dictionaries', 
+      'Strong\'s, Easton\'s', 
+      () => {},
+      'value'
+    )}
+  </View>
+
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>About</Text>
+    
+    {renderSettingItem(
+      'information-outline', 
+      'Version', 
+      '1.0.0 (Build 123)', 
+      () => {},
+      'value'
+    )}
+    
+    {renderSettingItem(
+      'file-document-outline', 
+      'Terms of Service', 
+      null, 
+      () => {},
+      'navigate'
+    )}
+    
+    {renderSettingItem(
+      'shield-check-outline', 
+      'Privacy Policy', 
+      null, 
+      () => {},
+      'navigate'
+    )}
+    
+    {renderSettingItem(
+      'help-circle-outline', 
+      'Help & Support', 
+      null, 
+      () => {},
+      'navigate'
+    )}
+  </View>
+</ScrollView>
+);
+};
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#f5f5f5',
+},
+section: {
+backgroundColor: '#fff',
+marginTop: 12,
+paddingVertical: 8,
+},
+sectionTitle: {
+fontSize: 13,
+fontWeight: '600',
+color: '#666',
+textTransform: 'uppercase',
+marginHorizontal: 16,
+marginVertical: 8,
+},
+settingItem: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+paddingHorizontal: 16,
+paddingVertical: 12,
+borderBottomWidth: 1,
+borderBottomColor: '#f0f0f0',
+},
+settingLeft: {
+flexDirection: 'row',
+alignItems: 'center',
+},
+settingTitle: {
+fontSize: 16,
+marginLeft: 12,
+color: '#333',
+},
+settingValue: {
+fontSize: 14,
+color: '#666',
+},
+syncButton: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+backgroundColor: '#8B0000',
+margin: 16,
+padding: 16,
+borderRadius: 8,
+},
+syncButtonText: {
+color: '#fff',
+fontSize: 16,
+fontWeight: '600',
+marginLeft: 8,
+},
+});
+export default SettingsScreen;
+export const BOOKS = [
+// Old Testament
+{ osis_code: 'Gen', name: 'Genesis', abbreviation: 'Gen', testament: 'OT', chapter_count: 50 },
+{ osis_code: 'Exod', name: 'Exodus', abbreviation: 'Exo', testament: 'OT', chapter_count: 40 },
+{ osis_code: 'Lev', name: 'Leviticus', abbreviation: 'Lev', testament: 'OT', chapter_count: 27 },
+{ osis_code: 'Num', name: 'Numbers', abbreviation: 'Num', testament: 'OT', chapter_count: 36 },
+{ osis_code: 'Deut', name: 'Deuteronomy', abbreviation: 'Deu', testament: 'OT', chapter_count: 34 },
+{ osis_code: 'Josh', name: 'Joshua', abbreviation: 'Jos', testament: 'OT', chapter_count: 24 },
+{ osis_code: 'Judg', name: 'Judges', abbreviation: 'Jdg', testament: 'OT', chapter_count: 21 },
+{ osis_code: 'Ruth', name: 'Ruth', abbreviation: 'Rut', testament: 'OT', chapter_count: 4 },
+{ osis_code: '1Sam', name: '1 Samuel', abbreviation: '1Sa', testament: 'OT', chapter_count: 31 },
+{ osis_code: '2Sam', name: '2 Samuel', abbreviation: '2Sa', testament: 'OT', chapter_count: 24 },
+{ osis_code: '1Kgs', name: '1 Kings', abbreviation: '1Ki', testament: 'OT', chapter_count: 22 },
+{ osis_code: '2Kgs', name: '2 Kings', abbreviation: '2Ki', testament: 'OT', chapter_count: 25 },
+{ osis_code: '1Chr', name: '1 Chronicles', abbreviation: '1Ch', testament: 'OT', chapter_count: 29 },
+{ osis_code: '2Chr', name: '2 Chronicles', abbreviation: '2Ch', testament: 'OT', chapter_count: 36 },
+{ osis_code: 'Ezra', name: 'Ezra', abbreviation: 'Ezr', testament: 'OT', chapter_count: 10 },
+{ osis_code: 'Neh', name: 'Nehemiah', abbreviation: 'Neh', testament: 'OT', chapter_count: 13 },
+{ osis_code: 'Esth', name: 'Esther', abbreviation: 'Est', testament: 'OT', chapter_count: 10 },
+{ osis_code: 'Job', name: 'Job', abbreviation: 'Job', testament: 'OT', chapter_count: 42 },
+{ osis_code: 'Ps', name: 'Psalms', abbreviation: 'Psa', testament: 'OT', chapter_count: 150 },
+{ osis_code: 'Prov', name: 'Proverbs', abbreviation: 'Pro', testament: 'OT', chapter_count: 31 },
+{ osis_code: 'Eccl', name: 'Ecclesiastes', abbreviation: 'Ecc', testament: 'OT', chapter_count: 12 },
+{ osis_code: 'Song', name: 'Song of Solomon', abbreviation: 'Son', testament: 'OT', chapter_count: 8 },
+{ osis_code: 'Isa', name: 'Isaiah', abbreviation: 'Isa', testament: 'OT', chapter_count: 66 },
+{ osis_code: 'Jer', name: 'Jeremiah', abbreviation: 'Jer', testament: 'OT', chapter_count: 52 },
+{ osis_code: 'Lam', name: 'Lamentations', abbreviation: 'Lam', testament: 'OT', chapter_count: 5 },
+{ osis_code: 'Ezek', name: 'Ezekiel', abbreviation: 'Eze', testament: 'OT', chapter_count: 48 },
+{ osis_code: 'Dan', name: 'Daniel', abbreviation: 'Dan', testament: 'OT', chapter_count: 12 },
+{ osis_code: 'Hos', name: 'Hosea', abbreviation: 'Hos', testament: 'OT', chapter_count: 14 },
+{ osis_code: 'Joel', name: 'Joel', abbreviation: 'Joe', testament: 'OT', chapter_count: 3 },
+{ osis_code: 'Amos', name: 'Amos', abbreviation: 'Amo', testament: 'OT', chapter_count: 9 },
+{ osis_code: 'Obad', name: 'Obadiah', abbreviation: 'Oba', testament: 'OT', chapter_count: 1 },
+{ osis_code: 'Jonah', name: 'Jonah', abbreviation: 'Jon', testament: 'OT', chapter_count: 4 },
+{ osis_code: 'Mic', name: 'Micah', abbreviation: 'Mic', testament: 'OT', chapter_count: 7 },
+{ osis_code: 'Nah', name: 'Nahum', abbreviation: 'Nah', testament: 'OT', chapter_count: 3 },
+{ osis_code: 'Hab', name: 'Habakkuk', abbreviation: 'Hab', testament: 'OT', chapter_count: 3 },
+{ osis_code: 'Zeph', name: 'Zephaniah', abbreviation: 'Zep', testament: 'OT', chapter_count: 3 },
+{ osis_code: 'Hag', name: 'Haggai', abbreviation: 'Hag', testament: 'OT', chapter_count: 2 },
+{ osis_code: 'Zech', name: 'Zechariah', abbreviation: 'Zec', testament: 'OT', chapter_count: 14 },
+{ osis_code: 'Mal', name: 'Malachi', abbreviation: 'Mal', testament: 'OT', chapter_count: 4 },
+// New Testament
+{ osis_code: 'Matt', name: 'Matthew', abbreviation: 'Mat', testament: 'NT', chapter_count: 28 },
+{ osis_code: 'Mark', name: 'Mark', abbreviation: 'Mar', testament: 'NT', chapter_count: 16 },
+{ osis_code: 'Luke', name: 'Luke', abbreviation: 'Luk', testament: 'NT', chapter_count: 24 },
+{ osis_code: 'John', name: 'John', abbreviation: 'Joh', testament: 'NT', chapter_count: 21 },
+{ osis_code: 'Acts', name: 'Acts', abbreviation: 'Act', testament: 'NT', chapter_count: 28 },
+{ osis_code: 'Rom', name: 'Romans', abbreviation: 'Rom', testament: 'NT', chapter_count: 16 },
+{ osis_code: '1Cor', name: '1 Corinthians', abbreviation: '1Co', testament: 'NT', chapter_count: 16 },
+{ osis_code: '2Cor', name: '2 Corinthians', abbreviation: '2Co', testament: 'NT', chapter_count: 13 },
+{ osis_code: 'Gal', name: 'Galatians', abbreviation: 'Gal', testament: 'NT', chapter_count: 6 },
+{ osis_code: 'Eph', name: 'Ephesians', abbreviation: 'Eph', testament: 'NT', chapter_count: 6 },
+{ osis_code: 'Phil', name: 'Philippians', abbreviation: 'Php', testament: 'NT', chapter_count: 4 },
+{ osis_code: 'Col', name: 'Colossians', abbreviation: 'Col', testament: 'NT', chapter_count: 4 },
+{ osis_code: '1Thess', name: '1 Thessalonians', abbreviation: '1Th', testament: 'NT', chapter_count: 5 },
+{ osis_code: '2Thess', name: '2 Thessalonians', abbreviation: '2Th', testament: 'NT', chapter_count: 3 },
+{ osis_code: '1Tim', name: '1 Timothy', abbreviation: '1Ti', testament: 'NT', chapter_count: 6 },
+{ osis_code: '2Tim', name: '2 Timothy', abbreviation: '2Ti', tes…
